@@ -1,0 +1,38 @@
+# Quadlet unit for the sp-portal HTTP service. Drop into
+# ~/.config/containers/systemd/ (user) or /etc/containers/systemd/ (system)
+# alongside sp-portal-data.volume and the secrets below, then:
+#
+#   podman secret create sp_portal_db_password /path/to/db_password   # file must be 0400/0600 content
+#   systemctl --user daemon-reload && systemctl --user start sp-portal
+#
+# The unit expects a MariaDB whose unix socket is reachable at
+# /run/mysqld/mysqld.sock (pod or bind mount from the mariadb service).
+[Unit]
+Description=ServerPerch customer portal (serverperch.com)
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=ghcr.io/technofish-au/sp-portal:latest
+ContainerName=sp-portal
+PublishPort=8080:8080
+Environment=PORTAL_HTTP_ADDR=:8080
+Environment=PORTAL_DB_SOCKET=/run/mysqld/mysqld.sock
+Environment=PORTAL_DB_NAME=portal
+Environment=PORTAL_DB_USER=portal
+Environment=PORTAL_DB_PASSWORD_FILE=/run/secrets/sp_portal_db_password
+Environment=PORTAL_STORAGE_DIR=/var/lib/sp-portal
+Secret=sp_portal_db_password,type=mount,mode=0400
+Volume=sp-portal-data.volume:/var/lib/sp-portal
+Volume=%t/mysqld:/run/mysqld
+HealthCmd=sp-portal healthcheck
+HealthInterval=30s
+HealthTimeout=5s
+HealthRetries=3
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

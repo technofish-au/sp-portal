@@ -1,0 +1,89 @@
+# Dev/eval compose for sp-portal: MariaDB with its unix socket shared into
+# the app and worker containers (the production transport), plus a TCP port
+# for host tooling. The schema is applied by `make dev-up` / `make migrate`.
+#
+#   make dev-up     # mariadb -> migrate -> app + worker
+#   curl localhost:8080/healthz
+name: sp-portal
+
+services:
+  mariadb:
+    image: mariadb:11.4
+    command:
+      - --socket=/run/mysqld/mysqld.sock
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      # SKIP LOCKED (the job queue) is fine under the default
+      # REPEATABLE-READ; binlog stays off in dev.
+      - --skip-log-bin
+    environment:
+      MARIADB_ROOT_PASSWORD: sp-portal-dev-root
+      MARIADB_DATABASE: portal
+      MARIADB_USER: portal
+      MARIADB_PASSWORD: sp-portal-dev
+    volumes:
+      - mariadb-data:/var/lib/mysql
+      - mysql-run:/run/mysqld
+    ports:
+      - "127.0.0.1:3306:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
+
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    command: serve
+    environment:
+      PORTAL_HTTP_ADDR: ":8080"
+      PORTAL_DB_SOCKET: /run/mysqld/mysqld.sock
+      PORTAL_DB_NAME: portal
+      PORTAL_DB_USER: portal
+      PORTAL_DB_PASSWORD: sp-portal-dev
+      PORTAL_STORAGE_DIR: /var/lib/sp-portal
+    volumes:
+      - mysql-run:/run/mysqld
+      - portal-data:/var/lib/sp-portal
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "sp-portal", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    command: worker
+    environment:
+      PORTAL_DB_SOCKET: /run/mysqld/mysqld.sock
+      PORTAL_DB_NAME: portal
+      PORTAL_DB_USER: portal
+      PORTAL_DB_PASSWORD: sp-portal-dev
+    volumes:
+      - mysql-run:/run/mysqld
+      - portal-data:/var/lib/sp-portal
+    # The image HEALTHCHECK probes the HTTP server; the worker serves no
+    # HTTP (a jobs-table heartbeat is a later-wave concern).
+    healthcheck:
+      disable: true
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      app:
+        condition: service_started
+
+volumes:
+  mariadb-data:
+  mysql-run:
+  portal-data:
