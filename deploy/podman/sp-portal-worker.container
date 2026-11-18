@@ -1,0 +1,26 @@
+# Quadlet unit for the sp-portal job worker (same image, `worker` command).
+# See sp-portal.container for the shared secrets/layout expectations.
+[Unit]
+Description=ServerPerch portal job worker
+After=network-online.target sp-portal.service
+Wants=network-online.target
+
+[Container]
+Image=ghcr.io/technofish-au/sp-portal:latest
+ContainerName=sp-portal-worker
+Exec=worker
+Environment=PORTAL_DB_SOCKET=/run/mysqld/mysqld.sock
+Environment=PORTAL_DB_NAME=portal
+Environment=PORTAL_DB_USER=portal
+Environment=PORTAL_DB_PASSWORD_FILE=/run/secrets/sp_portal_db_password
+Environment=PORTAL_STORAGE_DIR=/var/lib/sp-portal
+Secret=sp_portal_db_password,type=mount,mode=0400
+Volume=sp-portal-data.volume:/var/lib/sp-portal
+Volume=%t/mysqld:/run/mysqld
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

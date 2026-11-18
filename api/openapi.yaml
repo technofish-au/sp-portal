@@ -1,0 +1,101 @@
+# sp-portal API skeleton (R5-1 foundation).
+#
+# Only GET /healthz has a handler today. The /v1/* paths below document the
+# intended shape for later waves; the router mounts domain packages under
+# /v1 (see internal/httpapi/router.go) as they land.
+openapi: 3.1.0
+info:
+  title: ServerPerch Portal API
+  version: 0.1.0
+  description: |
+    Customer portal + licensing backend for the ServerPerch on-prem
+    monitoring appliance: organisations, licences, registered appliances,
+    releases and downloads.
+servers:
+  - url: /
+tags:
+  - name: meta
+    description: Service metadata (unauthenticated)
+  - name: organisations
+  - name: licences
+  - name: instances
+  - name: releases
+
+paths:
+  /healthz:
+    get:
+      tags: [meta]
+      summary: Liveness/readiness check
+      description: |
+        200 when the process is up and the database is reachable,
+        503 otherwise. Used by container HEALTHCHECKs.
+      operationId: getHealthz
+      responses:
+        "200":
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, version]
+                properties:
+                  status: { type: string, enum: [ok] }
+                  version: { type: string }
+        "503":
+          description: Database unreachable
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, detail]
+                properties:
+                  status: { type: string, enum: [unavailable] }
+                  detail: { type: string }
+
+  # --- Later waves: the versioned surface (no handlers yet) -------------
+
+  /v1/organisations:
+    get:
+      tags: [organisations]
+      summary: List organisations (placeholder)
+      description: Stub — implemented in a later wave.
+      responses:
+        "501": { description: Not implemented }
+  /v1/organisations/{orgId}:
+    get:
+      tags: [organisations]
+      summary: Get an organisation (placeholder)
+      description: Stub — implemented in a later wave.
+      parameters:
+        - $ref: "#/components/parameters/orgId"
+      responses:
+        "501": { description: Not implemented }
+  /v1/licences:
+    get:
+      tags: [licences]
+      summary: List issued licences (placeholder)
+      description: Stub — implemented in a later wave.
+      responses:
+        "501": { description: Not implemented }
+  /v1/instances:
+    get:
+      tags: [instances]
+      summary: List registered appliances (placeholder)
+      description: Stub — implemented in a later wave.
+      responses:
+        "501": { description: Not implemented }
+  /v1/releases:
+    get:
+      tags: [releases]
+      summary: List published releases (placeholder)
+      description: Stub — implemented in a later wave.
+      responses:
+        "501": { description: Not implemented }
+
+components:
+  parameters:
+    orgId:
+      name: orgId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }

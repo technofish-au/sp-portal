@@ -1,0 +1,17 @@
+# Build outputs
+/bin/
+/dist/
+/internal/webui/dist/
+
+# Web
+/web/node_modules/
+/web/dist/
+
+# Local env / secrets (never commit real credentials)
+*.local
+.env
+/secrets/
+
+# Editor/OS
+.DS_Store
+*.swp

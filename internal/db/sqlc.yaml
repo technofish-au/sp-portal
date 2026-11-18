@@ -1,0 +1,23 @@
+# sqlc configuration (run by `make gen`; needs sqlc on PATH or
+# `go tool sqlc`). Schema = the goose migrations; queries = queries/*.sql;
+# output = package dbq (committed, never edited by hand).
+version: "2"
+sql:
+  - engine: mysql
+    schema: migrations
+    queries: queries
+    gen:
+      go:
+        package: dbq
+        out: dbq
+        sql_package: database/sql
+        emit_empty_slices: true
+        emit_pointers_for_null_types: true
+        overrides:
+          - db_type: datetime
+            go_type: time.Time
+          - db_type: datetime
+            nullable: true
+            go_type:
+              type: time.Time
+              pointer: true
