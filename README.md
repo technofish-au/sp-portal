@@ -48,10 +48,19 @@ entries (env name = `PORTAL_` + upper(key)):
 | `storage_dir`     | `/var/lib/sp-portal`       | releases/, apt/, offline-bundles/, … |
 | `worker_interval` | `1s`                       | job-worker poll                      |
 | `stripe_*_file`   |                            | file-mounted Stripe secrets          |
+| `licence_issuer_kid` | `dev-issuer-1`          | kid embedded in licence signatures   |
+| `licence_signing_key_file` |                | base64 Ed25519 key/seed, 0400/0600; empty = embedded DEV key |
+| `instauth_max_skew` | `10m`                    | SP-Ed25519 timestamp window          |
+| `instauth_rate_limit_per_min` | `60`          | per-instance authed request limit    |
 
 Secret files (`db_password_file`, `stripe_secret_key_file`,
-`stripe_webhook_secret_file`) must be mode `0400` or `0600`; values are
-never logged (the slog handler also redacts sensitive keys).
+`stripe_webhook_secret_file`, `licence_signing_key_file`) must be mode
+`0400` or `0600`; values are never logged (the slog handler also redacts
+sensitive keys). When `licence_signing_key_file` is unset the service
+signs with the embedded **dev-only** issuer (`internal/licensing/devkey.go`)
+— never ship that to production. The appliance contract (licence document
+format, SP-Ed25519 auth scheme, activation/check-in flows) is specified in
+`docs/fakeportal.md`.
 
 ## Development
 

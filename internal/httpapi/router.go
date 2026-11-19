@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/technofish-au/sp-portal/internal/healthz"
+	"github.com/technofish-au/sp-portal/internal/licensing"
 	"github.com/technofish-au/sp-portal/internal/version"
 	"github.com/technofish-au/sp-portal/internal/webui"
 )
@@ -20,8 +21,9 @@ import (
 // Deps are the cross-domain dependencies the router hands to domain
 // Routes() constructors.
 type Deps struct {
-	DB     *sql.DB
-	Logger *slog.Logger
+	DB        *sql.DB
+	Logger    *slog.Logger
+	Licensing licensing.Options
 }
 
 // NewRouter builds the portal's HTTP handler.
@@ -48,6 +50,10 @@ func NewRouter(deps Deps) http.Handler {
 		// r.Mount("/licences", licences.Routes(deps))
 		// r.Mount("/instances", instances.Routes(deps))
 		// r.Mount("/releases", releases.Routes(deps))
+		// Licensing owns its own path set (/activations, /check-ins,
+		// /licence, /offline/activations) so it mounts at the /v1 root;
+		// chi prefers the more specific mounts above when they land.
+		r.Mount("/", licensing.Routes(deps.DB, deps.Logger, deps.Licensing))
 	})
 
 	// The embedded web UI catches everything else (SPA fallback lives in

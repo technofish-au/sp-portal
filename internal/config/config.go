@@ -77,30 +77,47 @@ type Config struct {
 	// db_password_file); empty disables Stripe integration.
 	StripeSecretKeyFile     string `koanf:"stripe_secret_key_file"`
 	StripeWebhookSecretFile string `koanf:"stripe_webhook_secret_file"`
+
+	// Licence issuer: licence_signing_key_file is a file-mounted secret
+	// (0400/0600) holding a base64 Ed25519 private key or seed that signs
+	// licence documents under licence_issuer_kid. Empty falls back to the
+	// embedded DEV-ONLY keypair (internal/licensing/devkey.go) — never
+	// for production.
+	LicenceIssuerKID      string `koanf:"licence_issuer_kid"`
+	LicenceSigningKeyFile string `koanf:"licence_signing_key_file"`
+
+	// Instance authentication (SP-Ed25519): accepted clock skew and the
+	// per-instance rate limit for authenticated requests.
+	InstAuthMaxSkew         time.Duration `koanf:"instauth_max_skew"`
+	InstAuthRateLimitPerMin int           `koanf:"instauth_rate_limit_per_min"`
 }
 
 // defaults lists every key with its default value. It doubles as the list of
 // keys looked up in the environment.
 func defaults() map[string]any {
 	return map[string]any{
-		"http_addr":                  ":8080",
-		"log_level":                  "info",
-		"db_name":                    "portal",
-		"db_user":                    "portal",
-		"db_socket":                  "/run/mysqld/mysqld.sock",
-		"db_host":                    "",
-		"db_port":                    3306,
-		"db_password":                "",
-		"db_password_file":           "",
-		"db_max_open_conns":          16,
-		"db_max_idle_conns":          4,
-		"db_conn_max_lifetime":       "5m",
-		"storage_dir":                "/var/lib/sp-portal",
-		"worker_interval":            "1s",
-		"worker_batch_size":          32,
-		"worker_stale_timeout":       "5m",
-		"stripe_secret_key_file":     "",
-		"stripe_webhook_secret_file": "",
+		"http_addr":                   ":8080",
+		"log_level":                   "info",
+		"db_name":                     "portal",
+		"db_user":                     "portal",
+		"db_socket":                   "/run/mysqld/mysqld.sock",
+		"db_host":                     "",
+		"db_port":                     3306,
+		"db_password":                 "",
+		"db_password_file":            "",
+		"db_max_open_conns":           16,
+		"db_max_idle_conns":           4,
+		"db_conn_max_lifetime":        "5m",
+		"storage_dir":                 "/var/lib/sp-portal",
+		"worker_interval":             "1s",
+		"worker_batch_size":           32,
+		"worker_stale_timeout":        "5m",
+		"stripe_secret_key_file":      "",
+		"stripe_webhook_secret_file":  "",
+		"licence_issuer_kid":          "dev-issuer-1",
+		"licence_signing_key_file":    "",
+		"instauth_max_skew":           "10m",
+		"instauth_rate_limit_per_min": 60,
 	}
 }
 
@@ -239,6 +256,15 @@ func (c Config) Validate() error {
 	}
 	if c.WorkerStaleTimeout <= 0 {
 		add("worker_stale_timeout must be positive")
+	}
+	if strings.TrimSpace(c.LicenceIssuerKID) == "" {
+		add("licence_issuer_kid must not be empty")
+	}
+	if c.InstAuthMaxSkew <= 0 {
+		add("instauth_max_skew must be positive")
+	}
+	if c.InstAuthRateLimitPerMin < 1 {
+		add("instauth_rate_limit_per_min must be >= 1")
 	}
 	if len(errs) > 0 {
 		return fmt.Errorf("config: %s", strings.Join(errs, "; "))
