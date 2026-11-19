@@ -9,6 +9,7 @@ import (
 	"github.com/technofish-au/sp-portal/internal/config"
 	"github.com/technofish-au/sp-portal/internal/httpapi"
 	"github.com/technofish-au/sp-portal/internal/jobs"
+	"github.com/technofish-au/sp-portal/internal/licensing"
 	"github.com/technofish-au/sp-portal/internal/mailer"
 	"github.com/technofish-au/sp-portal/internal/secrets"
 )
@@ -56,6 +57,10 @@ func buildDeps(cfg config.Config, sqlDB *sql.DB, logger *slog.Logger) (httpapi.D
 		}
 		whSecret = s
 	}
+	issuer, err := licenceIssuer(cfg, logger)
+	if err != nil {
+		return httpapi.Deps{}, fmt.Errorf("licence issuer: %w", err)
+	}
 	return httpapi.Deps{
 		DB: sqlDB, Logger: logger, Cfg: cfg,
 		Queue:               jobs.NewQueue(sqlDB),
@@ -64,6 +69,11 @@ func buildDeps(cfg config.Config, sqlDB *sql.DB, logger *slog.Logger) (httpapi.D
 		AltchaSecret:        altchaSecret,
 		Stripe:              stripe,
 		StripeWebhookSecret: whSecret,
+		Licensing: licensing.Options{
+			Issuer:          issuer,
+			MaxSkew:         cfg.InstAuthMaxSkew,
+			RateLimitPerMin: cfg.InstAuthRateLimitPerMin,
+		},
 	}, nil
 }
 

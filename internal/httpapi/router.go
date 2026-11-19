@@ -18,6 +18,7 @@ import (
 	"github.com/technofish-au/sp-portal/internal/config"
 	"github.com/technofish-au/sp-portal/internal/healthz"
 	"github.com/technofish-au/sp-portal/internal/jobs"
+	"github.com/technofish-au/sp-portal/internal/licensing"
 	"github.com/technofish-au/sp-portal/internal/mailer"
 	"github.com/technofish-au/sp-portal/internal/version"
 	"github.com/technofish-au/sp-portal/internal/webui"
@@ -39,6 +40,8 @@ type Deps struct {
 	AltchaSecret        []byte
 	Stripe              billing.Client // nil = billing disabled
 	StripeWebhookSecret string
+
+	Licensing licensing.Options
 }
 
 // NewRouter builds the portal's HTTP handler.
@@ -97,6 +100,10 @@ func NewRouter(deps Deps) http.Handler {
 		// r.Mount("/licences", licences.Routes(deps))
 		// r.Mount("/instances", instances.Routes(deps))
 		// r.Mount("/releases", releases.Routes(deps))
+		// Licensing owns /activations, /check-ins, /licence and
+		// /offline/activations; it registers directly on this mux since
+		// chi refuses two Mount("/") calls (accounts holds the root).
+		licensing.Mount(r, deps.DB, deps.Logger, deps.Licensing)
 	})
 
 	// The embedded web UI catches everything else (SPA fallback lives in

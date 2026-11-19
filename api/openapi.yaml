@@ -167,6 +167,57 @@ paths:
       responses:
         "204": { description: Disabled }
         "409": { description: Owner must keep TOTP }
+  # --- Licensing (R5-2; normative contract is docs/fakeportal.md) -------
+
+  /v1/activations:
+    post:
+      tags: [licences]
+      summary: Activate an appliance against a licence key
+      description: |
+        Body: {licence_key, instance_id, public_key, name?,
+        appliance_version?}. Issues a signed licence document plus apt
+        credentials, registers the instance and binds its signing key.
+        See docs/fakeportal.md for the document format and error codes.
+      responses:
+        "201": { description: Activated; licence document + apt_credentials }
+        "400": { description: bad_request }
+        "403": { description: licence revoked or expired }
+        "404": { description: unknown_licence_key }
+        "409": { description: seat_limit (max_instances reached) }
+  /v1/check-ins:
+    post:
+      tags: [instances]
+      summary: Instance check-in (SP-Ed25519 authenticated)
+      description: |
+        Records the appliance report and returns {status, licence,
+        messages, latest_release, entitled_updates}. Auth scheme:
+        `Authorization: SP-Ed25519 instance=.., key=.., ts=.., nonce=..,
+        sig=..` — see docs/fakeportal.md.
+      responses:
+        "200": { description: Check-in accepted }
+        "401": { description: bad_auth_header / stale_timestamp / wrong_key / bad_signature / replay }
+        "429": { description: rate_limited }
+  /v1/licence:
+    get:
+      tags: [licences]
+      summary: Current licence document (SP-Ed25519 authenticated)
+      description: Returns {status, licence, messages}; no report side effects.
+      responses:
+        "200": { description: Licence state }
+        "401": { description: instance authentication failed }
+  /v1/offline/activations:
+    post:
+      tags: [licences]
+      summary: Air-gapped activation bundle (customer-auth stub)
+      description: |
+        Produces a downloadable signed licence bundle {bundle_version,
+        licence, verification_keys, apt_credentials}. Until session auth
+        lands (accounts wave) the credential is org_id + licence_key.
+      responses:
+        "201": { description: Bundle produced (Content-Disposition attachment) }
+        "403": { description: licence does not belong to org }
+
+  # --- Later waves: the versioned surface (no handlers yet) -------------
 
   /v1/organisations:
     get:

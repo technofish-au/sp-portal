@@ -14,7 +14,9 @@ import (
 	"github.com/technofish-au/sp-portal/internal/config"
 	"github.com/technofish-au/sp-portal/internal/db"
 	"github.com/technofish-au/sp-portal/internal/httpapi"
+	"github.com/technofish-au/sp-portal/internal/licensing"
 	"github.com/technofish-au/sp-portal/internal/logging"
+	"github.com/technofish-au/sp-portal/internal/secrets"
 	"github.com/technofish-au/sp-portal/internal/storage"
 	"github.com/technofish-au/sp-portal/internal/version"
 )
@@ -78,6 +80,32 @@ func runServe(ctx context.Context, stderr io.Writer) int {
 		return ExitError
 	}
 	return ExitOK
+}
+
+// licenceIssuer resolves the licence-document signing key: the configured
+// file-mounted key, or — only when no key file is configured — the
+// embedded DEV-ONLY issuer (with a loud warning). An explicitly
+// configured key that is unreadable or invalid fails startup: silently
+// signing production licences with a public key would be worse.
+func licenceIssuer(cfg config.Config, logger *slog.Logger) (*licensing.Issuer, error) {
+	if cfg.LicenceSigningKeyFile == "" {
+		issuer, err := licensing.DevIssuer()
+		if err != nil {
+			return nil, err
+		}
+		logger.Warn("licence_signing_key_file unset; using embedded DEV issuer key — never for production",
+			slog.String("kid", issuer.KID()))
+		return issuer, nil
+	}
+	contents, err := secrets.ReadString(cfg.LicenceSigningKeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("licence signing key: %w", err)
+	}
+	issuer, err := licensing.LoadIssuer(cfg.LicenceIssuerKID, contents)
+	if err != nil {
+		return nil, fmt.Errorf("licence signing key: %w", err)
+	}
+	return issuer, nil
 }
 
 // serve runs the HTTP server until ctx is cancelled, then shuts it down

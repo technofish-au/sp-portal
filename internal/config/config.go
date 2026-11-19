@@ -127,51 +127,68 @@ type Config struct {
 	// StripeAutomaticTax turns on automatic_tax on Checkout Sessions and
 	// invoices (requires Stripe Tax registration).
 	StripeAutomaticTax bool `koanf:"stripe_automatic_tax"`
+
+	// Licence issuer: licence_signing_key_file is a file-mounted secret
+	// (0400/0600) holding a base64 Ed25519 private key or seed that signs
+	// licence documents under licence_issuer_kid. Empty falls back to the
+	// embedded DEV-ONLY keypair (internal/licensing/devkey.go) — never
+	// for production.
+	LicenceIssuerKID      string `koanf:"licence_issuer_kid"`
+	LicenceSigningKeyFile string `koanf:"licence_signing_key_file"`
+
+	// Instance authentication (SP-Ed25519): accepted clock skew and the
+	// per-instance rate limit for authenticated requests.
+	InstAuthMaxSkew         time.Duration `koanf:"instauth_max_skew"`
+	InstAuthRateLimitPerMin int           `koanf:"instauth_rate_limit_per_min"`
 }
 
 // defaults lists every key with its default value. It doubles as the list of
 // keys looked up in the environment.
 func defaults() map[string]any {
 	return map[string]any{
-		"http_addr":                  ":8080",
-		"log_level":                  "info",
-		"db_name":                    "portal",
-		"db_user":                    "portal",
-		"db_socket":                  "/run/mysqld/mysqld.sock",
-		"db_host":                    "",
-		"db_port":                    3306,
-		"db_password":                "",
-		"db_password_file":           "",
-		"db_max_open_conns":          16,
-		"db_max_idle_conns":          4,
-		"db_conn_max_lifetime":       "5m",
-		"storage_dir":                "/var/lib/sp-portal",
-		"worker_interval":            "1s",
-		"worker_batch_size":          32,
-		"worker_stale_timeout":       "5m",
-		"public_base_url":            "http://localhost:8080",
-		"auth_secret_file":           "",
-		"session_ttl":                "336h",
-		"secure_cookies":             false,
-		"altcha_secret_file":         "",
-		"altcha_max_number":          50000,
-		"trial_days":                 30,
-		"trial_max_machines":         25,
-		"past_due_grace":             "336h",
-		"suspend_sweep_interval":     "1h",
-		"smtp_host":                  "",
-		"smtp_port":                  25,
-		"smtp_user":                  "",
-		"smtp_password_file":         "",
-		"smtp_starttls":              false,
-		"mail_from":                  "portal@serverperch.com",
-		"mail_from_name":             "ServerPerch Portal",
-		"stripe_secret_key_file":     "",
-		"stripe_webhook_secret_file": "",
-		"stripe_price_starter":       "",
-		"stripe_price_pro":           "",
-		"stripe_price_enterprise":    "",
-		"stripe_automatic_tax":       false,
+		"http_addr":                   ":8080",
+		"log_level":                   "info",
+		"db_name":                     "portal",
+		"db_user":                     "portal",
+		"db_socket":                   "/run/mysqld/mysqld.sock",
+		"db_host":                     "",
+		"db_port":                     3306,
+		"db_password":                 "",
+		"db_password_file":            "",
+		"db_max_open_conns":           16,
+		"db_max_idle_conns":           4,
+		"db_conn_max_lifetime":        "5m",
+		"storage_dir":                 "/var/lib/sp-portal",
+		"worker_interval":             "1s",
+		"worker_batch_size":           32,
+		"worker_stale_timeout":        "5m",
+		"public_base_url":             "http://localhost:8080",
+		"auth_secret_file":            "",
+		"session_ttl":                 "336h",
+		"secure_cookies":              false,
+		"altcha_secret_file":          "",
+		"altcha_max_number":           50000,
+		"trial_days":                  30,
+		"trial_max_machines":          25,
+		"past_due_grace":              "336h",
+		"suspend_sweep_interval":      "1h",
+		"smtp_host":                   "",
+		"smtp_port":                   25,
+		"smtp_user":                   "",
+		"smtp_password_file":          "",
+		"smtp_starttls":               false,
+		"mail_from":                   "portal@serverperch.com",
+		"mail_from_name":              "ServerPerch Portal",
+		"stripe_secret_key_file":      "",
+		"stripe_webhook_secret_file":  "",
+		"stripe_price_starter":        "",
+		"stripe_price_pro":            "",
+		"stripe_price_enterprise":     "",
+		"stripe_automatic_tax":        false,
+		"licence_issuer_kid":          "dev-issuer-1",
+		"licence_signing_key_file":    "",
+		"instauth_max_skew":           "10m",
+		"instauth_rate_limit_per_min": 60,
 	}
 }
 
@@ -334,6 +351,15 @@ func (c Config) Validate() error {
 	}
 	if c.SMTPPort < 1 || c.SMTPPort > 65535 {
 		add("smtp_port must be between 1 and 65535")
+	}
+	if strings.TrimSpace(c.LicenceIssuerKID) == "" {
+		add("licence_issuer_kid must not be empty")
+	}
+	if c.InstAuthMaxSkew <= 0 {
+		add("instauth_max_skew must be positive")
+	}
+	if c.InstAuthRateLimitPerMin < 1 {
+		add("instauth_rate_limit_per_min must be >= 1")
 	}
 	if len(errs) > 0 {
 		return fmt.Errorf("config: %s", strings.Join(errs, "; "))
