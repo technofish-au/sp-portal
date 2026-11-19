@@ -20,6 +20,7 @@ import (
 	"github.com/technofish-au/sp-portal/internal/jobs"
 	"github.com/technofish-au/sp-portal/internal/licensing"
 	"github.com/technofish-au/sp-portal/internal/mailer"
+	"github.com/technofish-au/sp-portal/internal/releases"
 	"github.com/technofish-au/sp-portal/internal/version"
 	"github.com/technofish-au/sp-portal/internal/webui"
 )
@@ -42,6 +43,12 @@ type Deps struct {
 	StripeWebhookSecret string
 
 	Licensing licensing.Options
+
+	// DownloadSecret keys the HMAC signing release download URLs (empty
+	// = ephemeral dev key). BundleIssuer signs generated offline
+	// bundles (nil = embedded DEV issuer).
+	DownloadSecret []byte
+	BundleIssuer   *licensing.Issuer
 }
 
 // NewRouter builds the portal's HTTP handler.
@@ -92,6 +99,19 @@ func NewRouter(deps Deps) http.Handler {
 	// verify -> stripe_events row -> jobs row -> 200, worker does the rest.
 	r.Mount("/stripe", billing.WebhookRoutes(bill))
 
+	// The appliance apt repository lives at the root too (GET /apt/*
+	// basic-auth per docs/fakeportal.md), not under /v1.
+	relOpts := releases.Options{
+		StorageRoot:     deps.Cfg.StorageDir,
+		PublicBaseURL:   deps.Cfg.PublicBaseURL,
+		DownloadSecret:  deps.DownloadSecret,
+		DownloadURLTTL:  deps.Cfg.DownloadURLTTL,
+		BundleSigner:    deps.BundleIssuer,
+		MaxSkew:         deps.Cfg.InstAuthMaxSkew,
+		RateLimitPerMin: deps.Cfg.InstAuthRateLimitPerMin,
+	}
+	r.Mount("/apt", releases.AptHandler(deps.DB, deps.Logger, relOpts))
+
 	// Versioned API surface; domain packages mount one line each as waves
 	// land (see api/openapi.yaml for the documented shape).
 	r.Route("/v1", func(r chi.Router) {
@@ -99,11 +119,14 @@ func NewRouter(deps Deps) http.Handler {
 		r.Mount("/billing", billing.Routes(acct, bill))
 		// r.Mount("/licences", licences.Routes(deps))
 		// r.Mount("/instances", instances.Routes(deps))
-		// r.Mount("/releases", releases.Routes(deps))
 		// Licensing owns /activations, /check-ins, /licence and
 		// /offline/activations; it registers directly on this mux since
 		// chi refuses two Mount("/") calls (accounts holds the root).
 		licensing.Mount(r, deps.DB, deps.Logger, deps.Licensing)
+		// Releases owns /admin/releases*, /admin/offline-bundles,
+		// /admin/storage/prune, /releases/download-urls,
+		// /releases/{id}/download and /support-bundles.
+		releases.Mount(r, deps.DB, deps.Logger, acct, relOpts)
 	})
 
 	// The embedded web UI catches everything else (SPA fallback lives in

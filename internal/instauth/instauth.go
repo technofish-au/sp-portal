@@ -53,7 +53,12 @@ type Options struct {
 	MaxSkew         time.Duration // timestamp acceptance window, ±
 	RateLimitPerMin int           // sustained requests/min per instance
 	ReplayTTL       time.Duration // defaults to MaxSkew*2
-	Now             func() time.Time
+	// MaxBody bounds the request bytes the middleware buffers to verify
+	// the body hash (default 1MiB). Raise it only where a large signed
+	// body is legitimate (support-bundle uploads) — the whole body is
+	// held in memory for the signature check.
+	MaxBody int64
+	Now     func() time.Time
 }
 
 // Auth is the instance-authentication middleware plus its DB lookups.
@@ -81,11 +86,14 @@ func New(db *sql.DB, opts Options) *Auth {
 	if opts.Now == nil {
 		opts.Now = func() time.Time { return time.Now().UTC() }
 	}
+	if opts.MaxBody <= 0 {
+		opts.MaxBody = defaultMaxBody
+	}
 	return &Auth{
 		q:       dbq.New(db),
 		store:   NewStore(db),
 		maxSkew: opts.MaxSkew,
-		maxBody: defaultMaxBody,
+		maxBody: opts.MaxBody,
 		replay:  newReplayCache(opts.ReplayTTL, replayCacheCapacity),
 		limiter: newRateLimiter(opts.RateLimitPerMin, opts.Now),
 		now:     opts.Now,

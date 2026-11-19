@@ -49,6 +49,11 @@ func LoadIssuer(kid string, keyFileContents string) (*Issuer, error) {
 // KID returns the issuer's key id.
 func (i *Issuer) KID() string { return i.kid }
 
+// SignRaw signs arbitrary bytes with the issuer key — for signature
+// schemes that are not licence documents (offline bundle manifests,
+// docs/offline-bundles.md).
+func (i *Issuer) SignRaw(msg []byte) []byte { return ed25519.Sign(i.priv, msg) }
+
 // PublicKey returns the issuer's Ed25519 public key.
 func (i *Issuer) PublicKey() ed25519.PublicKey {
 	return i.priv.Public().(ed25519.PublicKey) //nolint:forcetypeassert -- Ed25519 keys only

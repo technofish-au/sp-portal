@@ -281,9 +281,11 @@ func (q *Queries) InsertInstanceReport(ctx context.Context, arg InsertInstanceRe
 
 const latestPublishedRelease = `-- name: LatestPublishedRelease :one
 SELECT id, version, component, channel, notes, artifact_path, sha256,
-       size_bytes, published_at, created_at, updated_at
+       size_bytes, published_at, created_at, updated_at,
+       min_upgrade_from, security, withdrawn_at
   FROM releases
  WHERE component = ? AND channel = ? AND published_at IS NOT NULL
+   AND withdrawn_at IS NULL
  ORDER BY published_at DESC, id DESC LIMIT 1
 `
 
@@ -292,6 +294,8 @@ type LatestPublishedReleaseParams struct {
 	Channel   string
 }
 
+// "Published" excludes withdrawn releases (00007): published_at keeps
+// the history, withdrawn_at is the off switch.
 func (q *Queries) LatestPublishedRelease(ctx context.Context, arg LatestPublishedReleaseParams) (Release, error) {
 	row := q.db.QueryRowContext(ctx, latestPublishedRelease, arg.Component, arg.Channel)
 	var i Release
@@ -307,6 +311,9 @@ func (q *Queries) LatestPublishedRelease(ctx context.Context, arg LatestPublishe
 		&i.PublishedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MinUpgradeFrom,
+		&i.Security,
+		&i.WithdrawnAt,
 	)
 	return i, err
 }

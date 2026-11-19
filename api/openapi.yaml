@@ -302,13 +302,155 @@ paths:
       description: Stub — implemented in a later wave.
       responses:
         "501": { description: Not implemented }
-  /v1/releases:
+  # --- Release catalogue + distribution (R5-4; contract docs are
+  # --- docs/fakeportal.md and docs/offline-bundles.md) ------------------
+
+  /v1/admin/releases:
+    post:
+      tags: [releases]
+      summary: Register a release (staff; CI upload leg)
+      description: |
+        multipart/form-data uploads the artifact inline (file part
+        "artifact" + fields version/component/channel/notes/
+        min_upgrade_from/security); application/json registers an
+        artifact already staged under storage_dir/releases/
+        ({artifact_path} + optional sha256, verified against the file).
+      responses:
+        "201": { description: Release registered }
+        "400": { description: Validation or sha256_mismatch }
+        "401": { description: Not authenticated }
+        "403": { description: Not a platform admin }
+        "409": { description: release_exists (component+version unique) }
     get:
       tags: [releases]
-      summary: List published releases (placeholder)
-      description: Stub — implemented in a later wave.
+      summary: List catalogue releases (staff)
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 100 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
       responses:
-        "501": { description: Not implemented }
+        "200": { description: releases[] newest first }
+        "401": { description: Not authenticated }
+        "403": { description: Not a platform admin }
+  /v1/admin/releases/{releaseId}:
+    patch:
+      tags: [releases]
+      summary: Edit release metadata (staff)
+      description: Body {security?, min_upgrade_from?}; absent fields keep their value.
+      parameters:
+        - { name: releaseId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Updated release }
+        "404": { description: not_found }
+  /v1/admin/releases/{releaseId}/publish:
+    post:
+      tags: [releases]
+      summary: Publish a release (staff, idempotent)
+      parameters:
+        - { name: releaseId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Published release }
+        "404": { description: not_found }
+        "409": { description: release_withdrawn }
+  /v1/admin/releases/{releaseId}/withdraw:
+    post:
+      tags: [releases]
+      summary: Withdraw a published release (staff)
+      parameters:
+        - { name: releaseId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Withdrawn release }
+        "404": { description: not_found }
+  /v1/admin/releases/{releaseId}/offline-bundle:
+    post:
+      tags: [releases]
+      summary: Generate a signed .spb offline bundle (staff)
+      description: |
+        Packs the release artifact into storage/offline-bundles/
+        serverperch-<component>-<version>.spb signed by the bundle
+        issuer (docs/offline-bundles.md).
+      parameters:
+        - { name: releaseId, in: path, required: true, schema: { type: string } }
+      responses:
+        "201": { description: bundle, sha256, size_bytes, kid, verification_keys }
+        "404": { description: not_found }
+        "409": { description: no_artifact }
+  /v1/admin/offline-bundles:
+    get:
+      tags: [releases]
+      summary: List generated offline bundles (staff)
+      responses:
+        "200": { description: bundles[] }
+  /v1/admin/storage/prune:
+    post:
+      tags: [releases]
+      summary: Prune unreferenced release artifacts (staff)
+      description: |
+        Body {dry_run?, include_withdrawn?}: deletes files under
+        storage_dir/releases/ that no releases row references;
+        include_withdrawn also drops withdrawn releases' artifacts.
+      responses:
+        "200": { description: removed paths + reclaimed bytes }
+  /v1/releases/download-urls:
+    post:
+      tags: [releases]
+      summary: Mint a signed download URL (SP-Ed25519)
+      description: |
+        Body {release_id} or {version, component?} -> {url, expires_at,
+        release}. The release must be published; expired/revoked
+        licences may only mint URLs for releases published on/before the
+        licence's end (older-versions rule). See docs/fakeportal.md.
+      responses:
+        "201": { description: Signed URL (15m TTL) }
+        "401": { description: instance authentication failed }
+        "403": { description: no_licence / entitlement_expired }
+        "404": { description: not_found }
+        "409": { description: not_published }
+  /v1/releases/{releaseId}/download:
+    get:
+      tags: [releases]
+      summary: Download a release artifact (signed t= token)
+      description: |
+        The t= credential minted by /v1/releases/download-urls is the
+        whole authorisation. Supports HTTP Range for resume.
+      parameters:
+        - { name: releaseId, in: path, required: true, schema: { type: string } }
+        - { name: t, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Artifact bytes }
+        "206": { description: Partial content (Range) }
+        "401": { description: bad_token / bad_signature }
+        "403": { description: token_expired }
+        "404": { description: not_found / no_artifact }
+  /v1/support-bundles:
+    post:
+      tags: [instances]
+      summary: Upload a diagnostic bundle (SP-Ed25519)
+      description: |
+        Raw archive body with Content-Type application/gzip,
+        application/x-tar or application/octet-stream, max 64 MiB.
+        Stored under storage_dir/support-bundles/<org>/<id>; retention
+        90 days. Contract leg only — processing UI is a later wave.
+      responses:
+        "201": { description: id, size_bytes, expires_at }
+        "401": { description: instance authentication failed }
+        "413": { description: body_too_large }
+        "415": { description: unsupported_media_type }
+  /apt/{path}:
+    get:
+      tags: [releases]
+      summary: Appliance apt repository (basic auth)
+      description: |
+        Serves storage_dir/apt/ (dists/, pool/) with HTTP basic auth —
+        the (instances.id, spapt_token) credentials minted at
+        activation. Expired/revoked licences may fetch metadata and
+        payload versions published on/before the licence end.
+      parameters:
+        - { name: path, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Repository file }
+        "401": { description: Missing/invalid apt credentials }
+        "403": { description: entitlement_expired }
+        "404": { description: not_found }
 
 components:
   parameters:

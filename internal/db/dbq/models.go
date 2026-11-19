@@ -112,17 +112,20 @@ type Organisation struct {
 }
 
 type Release struct {
-	ID           string
-	Version      string
-	Component    string
-	Channel      string
-	Notes        string
-	ArtifactPath string
-	Sha256       string
-	SizeBytes    int64
-	PublishedAt  *time.Time
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID             string
+	Version        string
+	Component      string
+	Channel        string
+	Notes          string
+	ArtifactPath   string
+	Sha256         string
+	SizeBytes      int64
+	PublishedAt    *time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	MinUpgradeFrom string
+	Security       bool
+	WithdrawnAt    *time.Time
 }
 
 type StripeEvent struct {

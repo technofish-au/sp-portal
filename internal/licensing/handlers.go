@@ -277,9 +277,11 @@ func (s *service) latestRelease(ctx context.Context) any {
 		return nil
 	}
 	return map[string]any{
-		"version":      rel.Version,
-		"channel":      rel.Channel,
-		"published_at": rel.PublishedAt,
+		"version":          rel.Version,
+		"channel":          rel.Channel,
+		"published_at":     rel.PublishedAt,
+		"security":         rel.Security,
+		"min_upgrade_from": rel.MinUpgradeFrom,
 	}
 }
 

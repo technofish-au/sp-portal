@@ -61,6 +61,17 @@ func buildDeps(cfg config.Config, sqlDB *sql.DB, logger *slog.Logger) (httpapi.D
 	if err != nil {
 		return httpapi.Deps{}, fmt.Errorf("licence issuer: %w", err)
 	}
+	dlSecret, err := readSecret(cfg.DownloadSecretFile)
+	if err != nil {
+		return httpapi.Deps{}, fmt.Errorf("download secret: %w", err)
+	}
+	if len(dlSecret) == 0 {
+		logger.Warn("download_secret_file unset: using ephemeral key — signed download URLs die on restart (dev mode)")
+	}
+	bundleIssuer, err := bundleIssuer(cfg, issuer, logger)
+	if err != nil {
+		return httpapi.Deps{}, fmt.Errorf("bundle signing key: %w", err)
+	}
 	return httpapi.Deps{
 		DB: sqlDB, Logger: logger, Cfg: cfg,
 		Queue:               jobs.NewQueue(sqlDB),
@@ -69,12 +80,31 @@ func buildDeps(cfg config.Config, sqlDB *sql.DB, logger *slog.Logger) (httpapi.D
 		AltchaSecret:        altchaSecret,
 		Stripe:              stripe,
 		StripeWebhookSecret: whSecret,
+		DownloadSecret:      dlSecret,
+		BundleIssuer:        bundleIssuer,
 		Licensing: licensing.Options{
 			Issuer:          issuer,
 			MaxSkew:         cfg.InstAuthMaxSkew,
 			RateLimitPerMin: cfg.InstAuthRateLimitPerMin,
 		},
 	}, nil
+}
+
+// bundleIssuer resolves the offline-bundle signing key: the configured
+// file-mounted key under bundle_signing_kid, or — when no key file is
+// set — the licence issuer (documented dev default; the licence key is
+// already resolved by this point, including the embedded DEV fallback).
+func bundleIssuer(cfg config.Config, licence *licensing.Issuer, logger *slog.Logger) (*licensing.Issuer, error) {
+	if cfg.BundleSigningKeyFile == "" {
+		logger.Info("bundle_signing_key_file unset; offline bundles signed by the licence issuer",
+			slog.String("kid", licence.KID()))
+		return licence, nil
+	}
+	contents, err := secrets.ReadString(cfg.BundleSigningKeyFile)
+	if err != nil {
+		return nil, err
+	}
+	return licensing.LoadIssuer(cfg.BundleSigningKID, contents)
 }
 
 // billingDeps builds the billing domain deps for the job worker (event

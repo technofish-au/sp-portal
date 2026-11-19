@@ -140,6 +140,22 @@ type Config struct {
 	// per-instance rate limit for authenticated requests.
 	InstAuthMaxSkew         time.Duration `koanf:"instauth_max_skew"`
 	InstAuthRateLimitPerMin int           `koanf:"instauth_rate_limit_per_min"`
+
+	// Download URLs: download_secret_file is a file-mounted secret
+	// (0400/0600) keying the HMAC that signs artifact download URLs.
+	// Empty generates an ephemeral key at startup — minted URLs die with
+	// the process (acceptable for dev). download_url_ttl bounds the URLs;
+	// the 15-minute default matches the contract in docs/fakeportal.md.
+	DownloadSecretFile string        `koanf:"download_secret_file"`
+	DownloadURLTTL     time.Duration `koanf:"download_url_ttl"`
+
+	// Offline update bundles: bundle_signing_key_file is a file-mounted
+	// base64 Ed25519 key/seed (same format as licence_signing_key_file)
+	// signing bundles under bundle_signing_kid. Empty reuses the licence
+	// issuer key (dev default) — production should use a distinct key so
+	// bundle signing is rotatable independently.
+	BundleSigningKeyFile string `koanf:"bundle_signing_key_file"`
+	BundleSigningKID     string `koanf:"bundle_signing_kid"`
 }
 
 // defaults lists every key with its default value. It doubles as the list of
@@ -189,6 +205,10 @@ func defaults() map[string]any {
 		"licence_signing_key_file":    "",
 		"instauth_max_skew":           "10m",
 		"instauth_rate_limit_per_min": 60,
+		"download_secret_file":        "",
+		"download_url_ttl":            "15m",
+		"bundle_signing_key_file":     "",
+		"bundle_signing_kid":          "bundle-issuer-1",
 	}
 }
 
@@ -360,6 +380,12 @@ func (c Config) Validate() error {
 	}
 	if c.InstAuthRateLimitPerMin < 1 {
 		add("instauth_rate_limit_per_min must be >= 1")
+	}
+	if c.DownloadURLTTL <= 0 {
+		add("download_url_ttl must be positive")
+	}
+	if strings.TrimSpace(c.BundleSigningKID) == "" {
+		add("bundle_signing_kid must not be empty")
 	}
 	if len(errs) > 0 {
 		return fmt.Errorf("config: %s", strings.Join(errs, "; "))

@@ -63,10 +63,15 @@ entries (env name = `PORTAL_` + upper(key)):
 | `licence_signing_key_file` |                | base64 Ed25519 key/seed, 0400/0600; empty = embedded DEV key |
 | `instauth_max_skew` | `10m`                    | SP-Ed25519 timestamp window          |
 | `instauth_rate_limit_per_min` | `60`          | per-instance authed request limit    |
+| `download_secret_file` |                       | HMAC key for signed download URLs (ephemeral if unset) |
+| `download_url_ttl` | `15m`                       | signed download-URL lifetime         |
+| `bundle_signing_key_file` |                    | base64 Ed25519 key/seed for .spb bundles; empty = licence issuer |
+| `bundle_signing_kid` | `bundle-issuer-1`           | kid embedded in bundle signatures    |
 
 Secret files (`db_password_file`, `auth_secret_file`, `altcha_secret_file`,
 `smtp_password_file`, `stripe_secret_key_file`,
-`stripe_webhook_secret_file`, `licence_signing_key_file`) must be mode
+`stripe_webhook_secret_file`, `licence_signing_key_file`,
+`download_secret_file`, `bundle_signing_key_file`) must be mode
 `0400` or `0600`; values are never logged (the slog handler also redacts
 sensitive keys). When `licence_signing_key_file` is unset the service
 signs with the embedded **dev-only** issuer (`internal/licensing/devkey.go`)

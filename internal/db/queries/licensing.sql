@@ -72,10 +72,14 @@ INSERT INTO instance_reports (id, instance_id, reported_at, payload)
 VALUES (?, ?, ?, ?);
 
 -- name: LatestPublishedRelease :one
+-- "Published" excludes withdrawn releases (00007): published_at keeps
+-- the history, withdrawn_at is the off switch.
 SELECT id, version, component, channel, notes, artifact_path, sha256,
-       size_bytes, published_at, created_at, updated_at
+       size_bytes, published_at, created_at, updated_at,
+       min_upgrade_from, security, withdrawn_at
   FROM releases
  WHERE component = ? AND channel = ? AND published_at IS NOT NULL
+   AND withdrawn_at IS NULL
  ORDER BY published_at DESC, id DESC LIMIT 1;
 
 -- name: InsertAuditEvent :exec
