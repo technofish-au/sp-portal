@@ -43,3 +43,119 @@ func (q *Queries) CreateLicence(ctx context.Context, arg CreateLicenceParams) er
 	)
 	return err
 }
+
+const listLicencesByOrg = `-- name: ListLicencesByOrg :many
+
+SELECT id, org_id, subscription_id, licence_key, kind, plan,
+       max_instances, issued_at, expires_at, revoked_at, created_at, updated_at,
+       doc_hash
+  FROM licences WHERE org_id = ? ORDER BY created_at DESC, id DESC
+`
+
+// Customer + staff views (R5-5).
+func (q *Queries) ListLicencesByOrg(ctx context.Context, orgID string) ([]Licence, error) {
+	rows, err := q.db.QueryContext(ctx, listLicencesByOrg, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Licence{}
+	for rows.Next() {
+		var i Licence
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.SubscriptionID,
+			&i.LicenceKey,
+			&i.Kind,
+			&i.Plan,
+			&i.MaxInstances,
+			&i.IssuedAt,
+			&i.ExpiresAt,
+			&i.RevokedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DocHash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const revokeLicence = `-- name: RevokeLicence :exec
+UPDATE licences SET revoked_at = CURRENT_TIMESTAMP(6)
+ WHERE id = ? AND revoked_at IS NULL
+`
+
+// NULL guard keeps revocation idempotent; the first revoke time stands.
+func (q *Queries) RevokeLicence(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, revokeLicence, id)
+	return err
+}
+
+const searchLicences = `-- name: SearchLicences :many
+SELECT id, org_id, subscription_id, licence_key, kind, plan,
+       max_instances, issued_at, expires_at, revoked_at, created_at, updated_at,
+       doc_hash
+  FROM licences
+ WHERE licence_key LIKE ? OR id = ? OR org_id = ?
+ ORDER BY created_at DESC LIMIT ?
+`
+
+type SearchLicencesParams struct {
+	LicenceKey string
+	ID         string
+	OrgID      string
+	Limit      int32
+}
+
+// Staff search: licence key substring, or an exact licence/org id.
+func (q *Queries) SearchLicences(ctx context.Context, arg SearchLicencesParams) ([]Licence, error) {
+	rows, err := q.db.QueryContext(ctx, searchLicences,
+		arg.LicenceKey,
+		arg.ID,
+		arg.OrgID,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Licence{}
+	for rows.Next() {
+		var i Licence
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.SubscriptionID,
+			&i.LicenceKey,
+			&i.Kind,
+			&i.Plan,
+			&i.MaxInstances,
+			&i.IssuedAt,
+			&i.ExpiresAt,
+			&i.RevokedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DocHash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

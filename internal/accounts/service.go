@@ -59,6 +59,9 @@ var (
 	ErrBadTOTP           = errors.New("invalid TOTP code")
 	ErrTOTPMissing       = errors.New("no pending TOTP enrolment")
 	ErrTOTPRequiredOwner = errors.New("organisation owners must keep TOTP enabled")
+	ErrTOTPRequiredStaff = errors.New("staff accounts must keep TOTP enabled")
+	ErrAlreadyMember     = errors.New("user is already a member of this organisation")
+	ErrLastOwner         = errors.New("cannot remove or demote the last organisation owner")
 	ErrValidation        = errors.New("validation failed")
 	ErrForbidden         = errors.New("insufficient role")
 	ErrNotFound          = errors.New("not found")
@@ -321,6 +324,9 @@ func (s *Service) loginStage(ctx context.Context, u dbq.User) (Stage, error) {
 	if u.TotpEnabled {
 		return StagePendingTOTP, nil
 	}
+	if u.IsPlatformAdmin {
+		return StagePendingSetup, nil // staff must enrol TOTP (R5-5)
+	}
 	owners, err := s.q.CountUserOwnerOrgs(ctx, u.ID)
 	if err != nil {
 		return "", fmt.Errorf("login: %w", err)
@@ -417,11 +423,14 @@ func (s *Service) TOTPEnable(ctx context.Context, sess Session, code, ip string)
 	return full, nil
 }
 
-// TOTPDisable turns off TOTP after verifying a current code. Owners may
-// not disable it (REQUIRED for owners).
+// TOTPDisable turns off TOTP after verifying a current code. Owners and
+// staff may not disable it (REQUIRED for both).
 func (s *Service) TOTPDisable(ctx context.Context, sess Session, code, ip string) error {
 	if !s.checkTOTP(ctx, sess.User, code) {
 		return ErrBadTOTP
+	}
+	if sess.User.IsPlatformAdmin {
+		return ErrTOTPRequiredStaff
 	}
 	owners, err := s.q.CountUserOwnerOrgs(ctx, sess.User.ID)
 	if err != nil {
@@ -528,10 +537,34 @@ func (s *Service) enqueueVerificationMail(ctx context.Context, u dbq.User) error
 	return err
 }
 
+// OrgSummary is the small org object embedded in views (sqlc rows have
+// no JSON tags — never marshal them directly).
+type OrgSummary struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
+// SubscriptionSummary is the subscription shape the SPA reads.
+type SubscriptionSummary struct {
+	ID               string     `json:"id"`
+	Plan             string     `json:"plan"`
+	Status           string     `json:"status"`
+	Seats            int32      `json:"seats"`
+	CurrentPeriodEnd *time.Time `json:"current_period_end"`
+}
+
+func subSummary(s dbq.Subscription) *SubscriptionSummary {
+	return &SubscriptionSummary{
+		ID: s.ID, Plan: s.Plan, Status: s.Status, Seats: s.Seats,
+		CurrentPeriodEnd: s.CurrentPeriodEnd,
+	}
+}
+
 // OrgView is one org the session user belongs to.
 type OrgView struct {
-	Org  dbq.Organisation `json:"org"`
-	Role string           `json:"role"`
+	Org  OrgSummary `json:"org"`
+	Role string     `json:"role"`
 }
 
 // ListOrgs returns the orgs the user belongs to with their role.
@@ -546,16 +579,19 @@ func (s *Service) ListOrgs(ctx context.Context, userID string) ([]OrgView, error
 		if err != nil {
 			return nil, fmt.Errorf("list orgs: %w", err)
 		}
-		out = append(out, OrgView{Org: org, Role: m.Role})
+		out = append(out, OrgView{
+			Org:  OrgSummary{ID: org.ID, Name: org.Name, Slug: org.Slug},
+			Role: m.Role,
+		})
 	}
 	return out, nil
 }
 
 // OrgDetail is GET /organisations/{id}.
 type OrgDetail struct {
-	Org          dbq.Organisation  `json:"org"`
-	Role         string            `json:"role"`
-	Subscription *dbq.Subscription `json:"subscription,omitempty"`
+	Org          OrgSummary           `json:"org"`
+	Role         string               `json:"role"`
+	Subscription *SubscriptionSummary `json:"subscription,omitempty"`
 }
 
 // GetOrg returns the org detail for a member; ErrForbidden when the user
@@ -569,9 +605,12 @@ func (s *Service) GetOrg(ctx context.Context, userID, orgID string) (*OrgDetail,
 	if err != nil {
 		return nil, ErrNotFound
 	}
-	d := &OrgDetail{Org: org, Role: m.Role}
+	d := &OrgDetail{
+		Org:  OrgSummary{ID: org.ID, Name: org.Name, Slug: org.Slug},
+		Role: m.Role,
+	}
 	if sub, err := s.q.GetLatestSubscriptionByOrg(ctx, orgID); err == nil {
-		d.Subscription = &sub
+		d.Subscription = subSummary(sub)
 	}
 	return d, nil
 }

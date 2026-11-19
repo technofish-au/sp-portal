@@ -35,6 +35,17 @@ const (
 	ActionInvoiceSent      = "billing.invoice.sent"
 	ActionPortalSession    = "billing.portal_session"
 	ActionStripeEventError = "billing.stripe_event.error"
+
+	// Team management + notification preferences (R5-5).
+	ActionMemberInvited   = "member.invited"
+	ActionMemberRemoved   = "member.removed"
+	ActionMemberRoleSet   = "member.role_changed"
+	ActionInviteAccepted  = "auth.invite_accepted"
+	ActionLicenceIssued   = "licence.issued"
+	ActionLicenceRevoked  = "licence.revoked"
+	ActionLicenceReissued = "licence.reissued"
+	ActionInstanceDeact   = "instance.deactivated"
+	ActionNotifPrefs      = "notification_prefs.updated"
 )
 
 // Entry is one audit_log row. Empty OrgID/ActorUserID store NULL (the

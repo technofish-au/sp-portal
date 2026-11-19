@@ -31,3 +31,14 @@ UPDATE users SET totp_enabled = ? WHERE id = ?;
 -- name: SetUserEmailVerified :exec
 UPDATE users SET email_verified_at = CURRENT_TIMESTAMP(6)
  WHERE id = ? AND email_verified_at IS NULL;
+
+-- name: SearchUsers :many
+-- Staff search: email/display-name substring, or an exact user id.
+SELECT id, email, display_name, password_hash, is_platform_admin,
+       totp_secret_enc, totp_enabled, disabled_at,
+       created_at, updated_at, email_verified_at
+  FROM users WHERE email LIKE ? OR display_name LIKE ? OR id = ?
+ ORDER BY email LIMIT ?;
+
+-- name: SetUserDisplayName :exec
+UPDATE users SET display_name = ? WHERE id = ?;

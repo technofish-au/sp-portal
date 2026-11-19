@@ -13,3 +13,13 @@ SELECT m.id, m.org_id, m.user_id, m.role, m.created_at, o.name AS org_name, o.sl
 
 -- name: CountUserOwnerOrgs :one
 SELECT COUNT(*) FROM memberships WHERE user_id = ? AND role = 'owner';
+
+-- name: DeleteMembership :exec
+DELETE FROM memberships WHERE org_id = ? AND user_id = ?;
+
+-- name: UpdateMembershipRole :exec
+UPDATE memberships SET role = ? WHERE org_id = ? AND user_id = ?;
+
+-- name: CountOrgOwners :one
+-- Guards the "can't demote/remove the last owner" rule.
+SELECT COUNT(*) FROM memberships WHERE org_id = ? AND role = 'owner';

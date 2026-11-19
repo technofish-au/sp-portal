@@ -29,3 +29,10 @@ UPDATE organisations SET name = ?, billing_email = ? WHERE id = ?;
 
 -- name: SetOrganisationTaxID :exec
 UPDATE organisations SET tax_id = ? WHERE id = ?;
+
+-- name: SearchOrganisations :many
+-- Staff search: name/slug/billing-email substring, or an exact org id.
+SELECT id, name, slug, billing_email, stripe_customer_id, created_at, updated_at, tax_id
+  FROM organisations
+ WHERE name LIKE ? OR slug LIKE ? OR billing_email LIKE ? OR id = ?
+ ORDER BY name LIMIT ?;

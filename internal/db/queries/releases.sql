@@ -91,3 +91,27 @@ SELECT l.id, l.org_id, l.subscription_id, l.licence_key, l.kind, l.plan,
 INSERT INTO support_bundles (id, org_id, instance_id, path, size_bytes,
                              uploaded_by, expires_at)
 VALUES (?, ?, ?, ?, ?, ?, ?);
+
+-- Customer catalogue + staff support-bundle hooks (R5-5).
+
+-- name: ListPublishedReleases :many
+-- The customer downloads catalogue: published and not withdrawn.
+SELECT id, version, component, channel, notes, artifact_path, sha256,
+       size_bytes, published_at, created_at, updated_at,
+       min_upgrade_from, security, withdrawn_at
+  FROM releases
+ WHERE published_at IS NOT NULL AND withdrawn_at IS NULL
+ ORDER BY published_at DESC, id DESC;
+
+-- name: ListSupportBundles :many
+-- Staff support-bundle list ('' org disables the filter).
+SELECT id, org_id, instance_id, path, size_bytes, uploaded_by,
+       uploaded_at, expires_at, created_at
+  FROM support_bundles
+ WHERE (? = '' OR org_id = ?)
+ ORDER BY uploaded_at DESC, id DESC LIMIT ? OFFSET ?;
+
+-- name: GetSupportBundle :one
+SELECT id, org_id, instance_id, path, size_bytes, uploaded_by,
+       uploaded_at, expires_at, created_at
+  FROM support_bundles WHERE id = ?;

@@ -127,6 +127,76 @@ func (q *Queries) ListOrgMembers(ctx context.Context, orgID string) ([]ListOrgMe
 	return items, nil
 }
 
+const searchUsers = `-- name: SearchUsers :many
+SELECT id, email, display_name, password_hash, is_platform_admin,
+       totp_secret_enc, totp_enabled, disabled_at,
+       created_at, updated_at, email_verified_at
+  FROM users WHERE email LIKE ? OR display_name LIKE ? OR id = ?
+ ORDER BY email LIMIT ?
+`
+
+type SearchUsersParams struct {
+	Email       string
+	DisplayName string
+	ID          string
+	Limit       int32
+}
+
+// Staff search: email/display-name substring, or an exact user id.
+func (q *Queries) SearchUsers(ctx context.Context, arg SearchUsersParams) ([]User, error) {
+	rows, err := q.db.QueryContext(ctx, searchUsers,
+		arg.Email,
+		arg.DisplayName,
+		arg.ID,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []User{}
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.DisplayName,
+			&i.PasswordHash,
+			&i.IsPlatformAdmin,
+			&i.TotpSecretEnc,
+			&i.TotpEnabled,
+			&i.DisabledAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.EmailVerifiedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setUserDisplayName = `-- name: SetUserDisplayName :exec
+UPDATE users SET display_name = ? WHERE id = ?
+`
+
+type SetUserDisplayNameParams struct {
+	DisplayName string
+	ID          string
+}
+
+func (q *Queries) SetUserDisplayName(ctx context.Context, arg SetUserDisplayNameParams) error {
+	_, err := q.db.ExecContext(ctx, setUserDisplayName, arg.DisplayName, arg.ID)
+	return err
+}
+
 const setUserEmailVerified = `-- name: SetUserEmailVerified :exec
 UPDATE users SET email_verified_at = CURRENT_TIMESTAMP(6)
  WHERE id = ? AND email_verified_at IS NULL

@@ -25,6 +25,7 @@ func Routes(s *Service) http.Handler {
 	r.Post("/auth/login", s.handleLogin)
 	r.Post("/auth/logout", s.handleLogout)
 	r.Get("/auth/verify-email", s.handleVerifyEmail)
+	r.Post("/auth/accept-invite", s.handleAcceptInvite)
 
 	// Pending-stage endpoints (TOTP challenge finishers).
 	r.Group(func(r chi.Router) {
@@ -49,6 +50,11 @@ func Routes(s *Service) http.Handler {
 		r.Get("/organisations", s.handleListOrgs)
 		r.Get("/organisations/{orgID}", s.handleGetOrg)
 		r.Get("/organisations/{orgID}/members", s.handleListMembers)
+		r.Post("/organisations/{orgID}/invites", s.handleInviteMember)
+		r.Patch("/organisations/{orgID}/members/{userID}", s.handleUpdateMemberRole)
+		r.Delete("/organisations/{orgID}/members/{userID}", s.handleRemoveMember)
+		r.Get("/organisations/{orgID}/notification-prefs", s.handleGetNotificationPrefs)
+		r.Put("/organisations/{orgID}/notification-prefs", s.handlePutNotificationPrefs)
 	})
 	return r
 }
@@ -97,8 +103,11 @@ func apiErr(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "bad_token", err.Error())
 	case errors.Is(err, ErrBadTOTP):
 		writeError(w, http.StatusUnauthorized, "bad_totp", err.Error())
-	case errors.Is(err, ErrTOTPMissing), errors.Is(err, ErrTOTPRequiredOwner):
+	case errors.Is(err, ErrTOTPMissing), errors.Is(err, ErrTOTPRequiredOwner),
+		errors.Is(err, ErrTOTPRequiredStaff):
 		writeError(w, http.StatusConflict, "totp_state", err.Error())
+	case errors.Is(err, ErrAlreadyMember), errors.Is(err, ErrLastOwner):
+		writeError(w, http.StatusConflict, "conflict", err.Error())
 	case errors.Is(err, ErrValidation):
 		writeError(w, http.StatusBadRequest, "validation", err.Error())
 	case errors.Is(err, ErrForbidden):
@@ -113,10 +122,11 @@ func apiErr(w http.ResponseWriter, err error) {
 // publicUser is the user object handed to clients (no credential fields).
 func publicUser(u dbq.User) map[string]any {
 	return map[string]any{
-		"id":           u.ID,
-		"email":        u.Email,
-		"display_name": u.DisplayName,
-		"totp_enabled": u.TotpEnabled,
+		"id":                u.ID,
+		"email":             u.Email,
+		"display_name":      u.DisplayName,
+		"totp_enabled":      u.TotpEnabled,
+		"is_platform_admin": u.IsPlatformAdmin,
 	}
 }
 
@@ -331,5 +341,9 @@ func (s *Service) handleListMembers(w http.ResponseWriter, r *http.Request) {
 		apiErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"members": members})
+	views := make([]map[string]any, 0, len(members))
+	for _, m := range members {
+		views = append(views, memberView(m))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"members": views})
 }

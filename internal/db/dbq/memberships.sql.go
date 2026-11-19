@@ -10,6 +10,18 @@ import (
 	"time"
 )
 
+const countOrgOwners = `-- name: CountOrgOwners :one
+SELECT COUNT(*) FROM memberships WHERE org_id = ? AND role = 'owner'
+`
+
+// Guards the "can't demote/remove the last owner" rule.
+func (q *Queries) CountOrgOwners(ctx context.Context, orgID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countOrgOwners, orgID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countUserOwnerOrgs = `-- name: CountUserOwnerOrgs :one
 SELECT COUNT(*) FROM memberships WHERE user_id = ? AND role = 'owner'
 `
@@ -40,6 +52,20 @@ func (q *Queries) CreateMembership(ctx context.Context, arg CreateMembershipPara
 		arg.UserID,
 		arg.Role,
 	)
+	return err
+}
+
+const deleteMembership = `-- name: DeleteMembership :exec
+DELETE FROM memberships WHERE org_id = ? AND user_id = ?
+`
+
+type DeleteMembershipParams struct {
+	OrgID  string
+	UserID string
+}
+
+func (q *Queries) DeleteMembership(ctx context.Context, arg DeleteMembershipParams) error {
+	_, err := q.db.ExecContext(ctx, deleteMembership, arg.OrgID, arg.UserID)
 	return err
 }
 
@@ -111,4 +137,19 @@ func (q *Queries) ListUserMemberships(ctx context.Context, userID string) ([]Lis
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateMembershipRole = `-- name: UpdateMembershipRole :exec
+UPDATE memberships SET role = ? WHERE org_id = ? AND user_id = ?
+`
+
+type UpdateMembershipRoleParams struct {
+	Role   string
+	OrgID  string
+	UserID string
+}
+
+func (q *Queries) UpdateMembershipRole(ctx context.Context, arg UpdateMembershipRoleParams) error {
+	_, err := q.db.ExecContext(ctx, updateMembershipRole, arg.Role, arg.OrgID, arg.UserID)
+	return err
 }

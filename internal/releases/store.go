@@ -31,6 +31,10 @@ const (
 	ActionBundleGenerated = "release.bundle_generated"
 	ActionStoragePruned   = "release.storage_pruned"
 	ActionSupportUploaded = "support_bundle.uploaded"
+
+	// R5-5 additions.
+	ActionDownloadMinted    = "release.download_url_minted"
+	ActionSupportDownloaded = "support_bundle.downloaded"
 )
 
 // ephemeralSecret generates a dev fallback HMAC key (minted URLs die
@@ -70,21 +74,7 @@ func (s *service) entitlement(ctx context.Context, inst dbq.Instance) (cutoff *t
 		}
 		return nil, false, fmt.Errorf("releases: licence lookup: %w", err)
 	}
-	// The licence ends at the earliest terminal event; revocation and
-	// expiry both count.
-	var end *time.Time
-	for _, t := range []*time.Time{lic.RevokedAt, lic.ExpiresAt} {
-		if t == nil {
-			continue
-		}
-		if end == nil || t.Before(*end) {
-			end = t
-		}
-	}
-	if end != nil && end.After(s.now()) {
-		end = nil // expires_at in the future: not yet terminal
-	}
-	return end, false, nil
+	return licenceEnd(lic, s.now()), false, nil
 }
 
 // releaseAllowed applies the older-versions rule: fully entitled

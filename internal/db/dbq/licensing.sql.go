@@ -69,6 +69,98 @@ func (q *Queries) CreateInstance(ctx context.Context, arg CreateInstanceParams) 
 	return err
 }
 
+const decommissionInstance = `-- name: DecommissionInstance :exec
+UPDATE instances SET status = 'decommissioned'
+ WHERE id = ? AND status <> 'decommissioned'
+`
+
+// Customer "deactivate": frees the seat (seat counts exclude
+// decommissioned rows). Reactivation reuses the same row.
+func (q *Queries) DecommissionInstance(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, decommissionInstance, id)
+	return err
+}
+
+const estateTotals = `-- name: EstateTotals :one
+SELECT
+  (SELECT COUNT(*) FROM organisations) AS organisations,
+  (SELECT COUNT(*) FROM users WHERE disabled_at IS NULL) AS users,
+  (SELECT COUNT(*) FROM licences WHERE revoked_at IS NULL) AS live_licences,
+  (SELECT COUNT(*) FROM instances WHERE status <> 'decommissioned') AS active_instances,
+  (SELECT COUNT(*) FROM instances WHERE status <> 'decommissioned'
+     AND suspected_clone_at IS NOT NULL) AS suspected_clones,
+  (SELECT COUNT(*) FROM instances WHERE status <> 'decommissioned'
+     AND last_seen_at >= NOW(6) - INTERVAL 1 DAY) AS seen_24h,
+  (SELECT COUNT(*) FROM instances WHERE status <> 'decommissioned'
+     AND last_seen_at >= NOW(6) - INTERVAL 7 DAY) AS seen_7d,
+  (SELECT COUNT(*) FROM instances WHERE status <> 'decommissioned'
+     AND (last_seen_at IS NULL
+          OR last_seen_at < NOW(6) - INTERVAL 7 DAY)) AS stale_7d
+`
+
+type EstateTotalsRow struct {
+	Organisations   int64
+	Users           int64
+	LiveLicences    int64
+	ActiveInstances int64
+	SuspectedClones int64
+	Seen24h         int64
+	Seen7d          int64
+	Stale7d         int64
+}
+
+// Estate view headline numbers; "live" excludes decommissioned rows.
+func (q *Queries) EstateTotals(ctx context.Context) (EstateTotalsRow, error) {
+	row := q.db.QueryRowContext(ctx, estateTotals)
+	var i EstateTotalsRow
+	err := row.Scan(
+		&i.Organisations,
+		&i.Users,
+		&i.LiveLicences,
+		&i.ActiveInstances,
+		&i.SuspectedClones,
+		&i.Seen24h,
+		&i.Seen7d,
+		&i.Stale7d,
+	)
+	return i, err
+}
+
+const estateVersionCounts = `-- name: EstateVersionCounts :many
+SELECT appliance_version, COUNT(*) AS instances
+  FROM instances WHERE status <> 'decommissioned'
+ GROUP BY appliance_version ORDER BY instances DESC, appliance_version
+`
+
+type EstateVersionCountsRow struct {
+	ApplianceVersion string
+	Instances        int64
+}
+
+// Estate view: live instance count per appliance version.
+func (q *Queries) EstateVersionCounts(ctx context.Context) ([]EstateVersionCountsRow, error) {
+	rows, err := q.db.QueryContext(ctx, estateVersionCounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []EstateVersionCountsRow{}
+	for rows.Next() {
+		var i EstateVersionCountsRow
+		if err := rows.Scan(&i.ApplianceVersion, &i.Instances); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const flagInstanceClone = `-- name: FlagInstanceClone :exec
 UPDATE instances SET suspected_clone_at = CURRENT_TIMESTAMP(6)
  WHERE id = ? AND suspected_clone_at IS NULL
@@ -316,6 +408,193 @@ func (q *Queries) LatestPublishedRelease(ctx context.Context, arg LatestPublishe
 		&i.WithdrawnAt,
 	)
 	return i, err
+}
+
+const listInstanceReports = `-- name: ListInstanceReports :many
+SELECT id, instance_id, reported_at, payload, created_at
+  FROM instance_reports WHERE instance_id = ?
+ ORDER BY reported_at DESC, id DESC LIMIT ?
+`
+
+type ListInstanceReportsParams struct {
+	InstanceID string
+	Limit      int32
+}
+
+// Check-in history for the instance detail page, newest first.
+func (q *Queries) ListInstanceReports(ctx context.Context, arg ListInstanceReportsParams) ([]InstanceReport, error) {
+	rows, err := q.db.QueryContext(ctx, listInstanceReports, arg.InstanceID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InstanceReport{}
+	for rows.Next() {
+		var i InstanceReport
+		if err := rows.Scan(
+			&i.ID,
+			&i.InstanceID,
+			&i.ReportedAt,
+			&i.Payload,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInstancesByLicence = `-- name: ListInstancesByLicence :many
+SELECT id, org_id, licence_id, name, fingerprint,
+       appliance_version, status, last_seen_at,
+       created_at, updated_at, public_key, suspected_clone_at
+  FROM instances WHERE licence_id = ? ORDER BY created_at, id
+`
+
+func (q *Queries) ListInstancesByLicence(ctx context.Context, licenceID sql.NullString) ([]Instance, error) {
+	rows, err := q.db.QueryContext(ctx, listInstancesByLicence, licenceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Instance{}
+	for rows.Next() {
+		var i Instance
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.LicenceID,
+			&i.Name,
+			&i.Fingerprint,
+			&i.ApplianceVersion,
+			&i.Status,
+			&i.LastSeenAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PublicKey,
+			&i.SuspectedCloneAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInstancesByOrg = `-- name: ListInstancesByOrg :many
+
+SELECT id, org_id, licence_id, name, fingerprint,
+       appliance_version, status, last_seen_at,
+       created_at, updated_at, public_key, suspected_clone_at
+  FROM instances WHERE org_id = ? ORDER BY created_at DESC, id DESC
+`
+
+// Customer portal fleet views + staff estate aggregates (R5-5).
+func (q *Queries) ListInstancesByOrg(ctx context.Context, orgID string) ([]Instance, error) {
+	rows, err := q.db.QueryContext(ctx, listInstancesByOrg, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Instance{}
+	for rows.Next() {
+		var i Instance
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.LicenceID,
+			&i.Name,
+			&i.Fingerprint,
+			&i.ApplianceVersion,
+			&i.Status,
+			&i.LastSeenAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PublicKey,
+			&i.SuspectedCloneAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchInstances = `-- name: SearchInstances :many
+SELECT id, org_id, licence_id, name, fingerprint,
+       appliance_version, status, last_seen_at,
+       created_at, updated_at, public_key, suspected_clone_at
+  FROM instances
+ WHERE name LIKE ? OR fingerprint LIKE ? OR id = ?
+ ORDER BY created_at DESC LIMIT ?
+`
+
+type SearchInstancesParams struct {
+	Name        string
+	Fingerprint string
+	ID          string
+	Limit       int32
+}
+
+// Staff search: display name or fingerprint substring, or an exact id.
+func (q *Queries) SearchInstances(ctx context.Context, arg SearchInstancesParams) ([]Instance, error) {
+	rows, err := q.db.QueryContext(ctx, searchInstances,
+		arg.Name,
+		arg.Fingerprint,
+		arg.ID,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Instance{}
+	for rows.Next() {
+		var i Instance
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.LicenceID,
+			&i.Name,
+			&i.Fingerprint,
+			&i.ApplianceVersion,
+			&i.Status,
+			&i.LastSeenAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PublicKey,
+			&i.SuspectedCloneAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const setLicenceDocHash = `-- name: SetLicenceDocHash :exec

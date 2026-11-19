@@ -100,6 +100,17 @@ type Membership struct {
 	CreatedAt time.Time
 }
 
+type NotificationPref struct {
+	OrgID                 string
+	UserID                string
+	NotifyVersionBehind   bool
+	NotifySecurityRelease bool
+	NotifyLicenceExpiry   bool
+	NotifyBilling         bool
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+}
+
 type Organisation struct {
 	ID               string
 	Name             string

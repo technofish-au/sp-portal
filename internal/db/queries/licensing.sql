@@ -90,3 +90,61 @@ VALUES (?, ?, NULL, '', ?, ?, ?, ?, '');
 -- name: InsertDownloadToken :exec
 INSERT INTO download_tokens (id, token_hash, org_id, kind, path, expires_at)
 VALUES (?, ?, ?, ?, ?, ?);
+
+-- Customer portal fleet views + staff estate aggregates (R5-5).
+
+-- name: ListInstancesByOrg :many
+SELECT id, org_id, licence_id, name, fingerprint,
+       appliance_version, status, last_seen_at,
+       created_at, updated_at, public_key, suspected_clone_at
+  FROM instances WHERE org_id = ? ORDER BY created_at DESC, id DESC;
+
+-- name: ListInstancesByLicence :many
+SELECT id, org_id, licence_id, name, fingerprint,
+       appliance_version, status, last_seen_at,
+       created_at, updated_at, public_key, suspected_clone_at
+  FROM instances WHERE licence_id = ? ORDER BY created_at, id;
+
+-- name: ListInstanceReports :many
+-- Check-in history for the instance detail page, newest first.
+SELECT id, instance_id, reported_at, payload, created_at
+  FROM instance_reports WHERE instance_id = ?
+ ORDER BY reported_at DESC, id DESC LIMIT ?;
+
+-- name: DecommissionInstance :exec
+-- Customer "deactivate": frees the seat (seat counts exclude
+-- decommissioned rows). Reactivation reuses the same row.
+UPDATE instances SET status = 'decommissioned'
+ WHERE id = ? AND status <> 'decommissioned';
+
+-- name: SearchInstances :many
+-- Staff search: display name or fingerprint substring, or an exact id.
+SELECT id, org_id, licence_id, name, fingerprint,
+       appliance_version, status, last_seen_at,
+       created_at, updated_at, public_key, suspected_clone_at
+  FROM instances
+ WHERE name LIKE ? OR fingerprint LIKE ? OR id = ?
+ ORDER BY created_at DESC LIMIT ?;
+
+-- name: EstateVersionCounts :many
+-- Estate view: live instance count per appliance version.
+SELECT appliance_version, COUNT(*) AS instances
+  FROM instances WHERE status <> 'decommissioned'
+ GROUP BY appliance_version ORDER BY instances DESC, appliance_version;
+
+-- name: EstateTotals :one
+-- Estate view headline numbers; "live" excludes decommissioned rows.
+SELECT
+  (SELECT COUNT(*) FROM organisations) AS organisations,
+  (SELECT COUNT(*) FROM users WHERE disabled_at IS NULL) AS users,
+  (SELECT COUNT(*) FROM licences WHERE revoked_at IS NULL) AS live_licences,
+  (SELECT COUNT(*) FROM instances WHERE status <> 'decommissioned') AS active_instances,
+  (SELECT COUNT(*) FROM instances WHERE status <> 'decommissioned'
+     AND suspected_clone_at IS NOT NULL) AS suspected_clones,
+  (SELECT COUNT(*) FROM instances WHERE status <> 'decommissioned'
+     AND last_seen_at >= NOW(6) - INTERVAL 1 DAY) AS seen_24h,
+  (SELECT COUNT(*) FROM instances WHERE status <> 'decommissioned'
+     AND last_seen_at >= NOW(6) - INTERVAL 7 DAY) AS seen_7d,
+  (SELECT COUNT(*) FROM instances WHERE status <> 'decommissioned'
+     AND (last_seen_at IS NULL
+          OR last_seen_at < NOW(6) - INTERVAL 7 DAY)) AS stale_7d;

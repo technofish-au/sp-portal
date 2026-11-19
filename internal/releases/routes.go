@@ -68,6 +68,7 @@ type service struct {
 	q      *dbq.Queries
 	log    *slog.Logger
 	authn  *instauth.Auth
+	acct   *accounts.Service
 	opts   Options
 	signer *licensing.Issuer
 	now    func() time.Time
@@ -95,17 +96,21 @@ func Routes(db *sql.DB, logger *slog.Logger, acct *accounts.Service, opts Option
 //	POST   /admin/releases/{releaseID}/offline-bundle  staff session
 //	GET    /admin/offline-bundles                 staff session
 //	POST   /admin/storage/prune                   staff session
+//	GET    /admin/support-bundles                 staff session
+//	GET    /admin/support-bundles/{bundleID}/download  staff session
+//	GET    /releases                              customer session (catalogue)
+//	POST   /releases/{releaseID}/download-url     customer session (mint)
 //	POST   /releases/download-urls                SP-Ed25519 instance auth
 //	GET    /releases/{releaseID}/download         signed download token
 //	POST   /support-bundles                       SP-Ed25519 instance auth
 func Mount(r chi.Router, db *sql.DB, logger *slog.Logger, acct *accounts.Service, opts Options) {
 	svc := newService(db, logger, opts)
+	svc.acct = acct
 
-	// Staff catalogue admin — session cookie + is_platform_admin.
+	// Staff catalogue admin — session cookie + is_platform_admin + TOTP.
 	r.Group(func(r chi.Router) {
 		r.Use(acct.SessionMiddleware())
-		r.Use(accounts.RequireAuth)
-		r.Use(svc.requireStaff)
+		r.Use(accounts.RequireStaff)
 		r.Post("/admin/releases", svc.registerRelease)
 		r.Get("/admin/releases", svc.listReleases)
 		r.Patch("/admin/releases/{releaseID}", svc.updateRelease)
@@ -114,6 +119,17 @@ func Mount(r chi.Router, db *sql.DB, logger *slog.Logger, acct *accounts.Service
 		r.Post("/admin/releases/{releaseID}/offline-bundle", svc.generateBundle)
 		r.Get("/admin/offline-bundles", svc.listBundles)
 		r.Post("/admin/storage/prune", svc.pruneStorage)
+		r.Get("/admin/support-bundles", svc.listSupportBundles)
+		r.Get("/admin/support-bundles/{bundleID}/download", svc.downloadSupportBundle)
+	})
+
+	// Customer catalogue + download minting — session cookie, org
+	// membership and licence entitlement enforced per request (R5-5).
+	r.Group(func(r chi.Router) {
+		r.Use(acct.SessionMiddleware())
+		r.Use(accounts.RequireAuth)
+		r.Get("/releases", svc.listPublished)
+		r.Post("/releases/{releaseID}/download-url", svc.mintForUser)
 	})
 
 	// Appliance-facing endpoints (SP-Ed25519, same scheme as licensing).
@@ -186,23 +202,6 @@ func newService(db *sql.DB, logger *slog.Logger, opts Options) *service {
 		signer: signer,
 		now:    now,
 	}
-}
-
-// requireStaff rejects non-staff sessions: the user must exist, be fully
-// authenticated and carry users.is_platform_admin.
-func (s *service) requireStaff(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		sess, ok := accounts.SessionFrom(r.Context())
-		if !ok {
-			writeErr(w, http.StatusUnauthorized, "not_authenticated", "sign-in required")
-			return
-		}
-		if !sess.User.IsPlatformAdmin {
-			writeErr(w, http.StatusForbidden, "forbidden", "platform admin required")
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
 
 // storagePath resolves a storage-root-relative path, refusing traversal

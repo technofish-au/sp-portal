@@ -77,6 +77,22 @@ function IndexPage() {
         </Text>
       </Group>
 
+      <Group>
+        {(
+          [
+            ['/licences', 'Licences'],
+            ['/instances', 'Instances'],
+            ['/downloads', 'Downloads'],
+            ['/team', 'Team'],
+            ['/notifications', 'Notifications'],
+          ] as const
+        ).map(([to, label]) => (
+          <Button key={to} component={Link} to={to} variant="light">
+            {label}
+          </Button>
+        ))}
+      </Group>
+
       {detail && (
         <Card withBorder maw={560}>
           <Group justify="space-between" mb="xs">
@@ -132,10 +148,6 @@ function IndexPage() {
           )}
         </Card>
       )}
-      <Text size="sm" c="dimmed">
-        Licences, appliances and downloads land in the next release waves — this is the
-        R5-3 accounts + billing skeleton.
-      </Text>
     </Stack>
   );
 }

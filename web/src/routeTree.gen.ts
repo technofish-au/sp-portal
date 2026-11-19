@@ -10,13 +10,35 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AcceptInviteRouteImport } from './routes/accept-invite'
+import { Route as DownloadsRouteImport } from './routes/downloads'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as TeamRouteImport } from './routes/team'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminAuditRouteImport } from './routes/admin/audit'
+import { Route as AdminReleasesRouteImport } from './routes/admin/releases'
+import { Route as InstancesIndexRouteImport } from './routes/instances/index'
+import { Route as InstancesInstanceIdRouteImport } from './routes/instances/$instanceId'
+import { Route as LicencesIndexRouteImport } from './routes/licences/index'
+import { Route as LicencesLicenceIdRouteImport } from './routes/licences/$licenceId'
+import { Route as AdminOrganisationsOrgIdRouteImport } from './routes/admin/organisations.$orgId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AcceptInviteRoute = AcceptInviteRouteImport.update({
+  id: '/accept-invite',
+  path: '/accept-invite',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DownloadsRoute = DownloadsRouteImport.update({
+  id: '/downloads',
+  path: '/downloads',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -24,9 +46,19 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const NotificationsRoute = NotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TeamRoute = TeamRouteImport.update({
+  id: '/team',
+  path: '/team',
   getParentRoute: () => rootRouteImport,
 } as any)
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
@@ -34,39 +66,176 @@ const VerifyEmailRoute = VerifyEmailRouteImport.update({
   path: '/verify-email',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAuditRoute = AdminAuditRouteImport.update({
+  id: '/admin/audit',
+  path: '/admin/audit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminReleasesRoute = AdminReleasesRouteImport.update({
+  id: '/admin/releases',
+  path: '/admin/releases',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InstancesIndexRoute = InstancesIndexRouteImport.update({
+  id: '/instances/',
+  path: '/instances/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InstancesInstanceIdRoute = InstancesInstanceIdRouteImport.update({
+  id: '/instances/$instanceId',
+  path: '/instances/$instanceId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LicencesIndexRoute = LicencesIndexRouteImport.update({
+  id: '/licences/',
+  path: '/licences/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LicencesLicenceIdRoute = LicencesLicenceIdRouteImport.update({
+  id: '/licences/$licenceId',
+  path: '/licences/$licenceId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminOrganisationsOrgIdRoute = AdminOrganisationsOrgIdRouteImport.update({
+  id: '/admin/organisations/$orgId',
+  path: '/admin/organisations/$orgId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/accept-invite': typeof AcceptInviteRoute
+  '/downloads': typeof DownloadsRoute
   '/login': typeof LoginRoute
+  '/notifications': typeof NotificationsRoute
   '/signup': typeof SignupRoute
+  '/team': typeof TeamRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/admin/audit': typeof AdminAuditRoute
+  '/admin/releases': typeof AdminReleasesRoute
+  '/instances/$instanceId': typeof InstancesInstanceIdRoute
+  '/licences/$licenceId': typeof LicencesLicenceIdRoute
+  '/admin/': typeof AdminIndexRoute
+  '/instances/': typeof InstancesIndexRoute
+  '/licences/': typeof LicencesIndexRoute
+  '/admin/organisations/$orgId': typeof AdminOrganisationsOrgIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/accept-invite': typeof AcceptInviteRoute
+  '/downloads': typeof DownloadsRoute
   '/login': typeof LoginRoute
+  '/notifications': typeof NotificationsRoute
   '/signup': typeof SignupRoute
+  '/team': typeof TeamRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/admin/audit': typeof AdminAuditRoute
+  '/admin/releases': typeof AdminReleasesRoute
+  '/instances/$instanceId': typeof InstancesInstanceIdRoute
+  '/licences/$licenceId': typeof LicencesLicenceIdRoute
+  '/admin': typeof AdminIndexRoute
+  '/instances': typeof InstancesIndexRoute
+  '/licences': typeof LicencesIndexRoute
+  '/admin/organisations/$orgId': typeof AdminOrganisationsOrgIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/accept-invite': typeof AcceptInviteRoute
+  '/downloads': typeof DownloadsRoute
   '/login': typeof LoginRoute
+  '/notifications': typeof NotificationsRoute
   '/signup': typeof SignupRoute
+  '/team': typeof TeamRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/admin/audit': typeof AdminAuditRoute
+  '/admin/releases': typeof AdminReleasesRoute
+  '/instances/$instanceId': typeof InstancesInstanceIdRoute
+  '/licences/$licenceId': typeof LicencesLicenceIdRoute
+  '/admin/': typeof AdminIndexRoute
+  '/instances/': typeof InstancesIndexRoute
+  '/licences/': typeof LicencesIndexRoute
+  '/admin/organisations/$orgId': typeof AdminOrganisationsOrgIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/signup' | '/verify-email'
+  fullPaths:
+    | '/'
+    | '/accept-invite'
+    | '/downloads'
+    | '/login'
+    | '/notifications'
+    | '/signup'
+    | '/team'
+    | '/verify-email'
+    | '/admin/audit'
+    | '/admin/releases'
+    | '/instances/$instanceId'
+    | '/licences/$licenceId'
+    | '/admin/'
+    | '/instances/'
+    | '/licences/'
+    | '/admin/organisations/$orgId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/signup' | '/verify-email'
-  id: '__root__' | '/' | '/login' | '/signup' | '/verify-email'
+  to:
+    | '/'
+    | '/accept-invite'
+    | '/downloads'
+    | '/login'
+    | '/notifications'
+    | '/signup'
+    | '/team'
+    | '/verify-email'
+    | '/admin/audit'
+    | '/admin/releases'
+    | '/instances/$instanceId'
+    | '/licences/$licenceId'
+    | '/admin'
+    | '/instances'
+    | '/licences'
+    | '/admin/organisations/$orgId'
+  id:
+    | '__root__'
+    | '/'
+    | '/accept-invite'
+    | '/downloads'
+    | '/login'
+    | '/notifications'
+    | '/signup'
+    | '/team'
+    | '/verify-email'
+    | '/admin/audit'
+    | '/admin/releases'
+    | '/instances/$instanceId'
+    | '/licences/$licenceId'
+    | '/admin/'
+    | '/instances/'
+    | '/licences/'
+    | '/admin/organisations/$orgId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AcceptInviteRoute: typeof AcceptInviteRoute
+  DownloadsRoute: typeof DownloadsRoute
   LoginRoute: typeof LoginRoute
+  NotificationsRoute: typeof NotificationsRoute
   SignupRoute: typeof SignupRoute
+  TeamRoute: typeof TeamRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
+  AdminAuditRoute: typeof AdminAuditRoute
+  AdminReleasesRoute: typeof AdminReleasesRoute
+  InstancesInstanceIdRoute: typeof InstancesInstanceIdRoute
+  LicencesLicenceIdRoute: typeof LicencesLicenceIdRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+  InstancesIndexRoute: typeof InstancesIndexRoute
+  LicencesIndexRoute: typeof LicencesIndexRoute
+  AdminOrganisationsOrgIdRoute: typeof AdminOrganisationsOrgIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -78,11 +247,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/accept-invite': {
+      id: '/accept-invite'
+      path: '/accept-invite'
+      fullPath: '/accept-invite'
+      preLoaderRoute: typeof AcceptInviteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/downloads': {
+      id: '/downloads'
+      path: '/downloads'
+      fullPath: '/downloads'
+      preLoaderRoute: typeof DownloadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/notifications': {
+      id: '/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof NotificationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signup': {
@@ -92,6 +282,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/team': {
+      id: '/team'
+      path: '/team'
+      fullPath: '/team'
+      preLoaderRoute: typeof TeamRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/verify-email': {
       id: '/verify-email'
       path: '/verify-email'
@@ -99,14 +296,82 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VerifyEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/': {
+      id: '/admin/'
+      path: '/admin'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/audit': {
+      id: '/admin/audit'
+      path: '/admin/audit'
+      fullPath: '/admin/audit'
+      preLoaderRoute: typeof AdminAuditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/releases': {
+      id: '/admin/releases'
+      path: '/admin/releases'
+      fullPath: '/admin/releases'
+      preLoaderRoute: typeof AdminReleasesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/instances/': {
+      id: '/instances/'
+      path: '/instances'
+      fullPath: '/instances/'
+      preLoaderRoute: typeof InstancesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/instances/$instanceId': {
+      id: '/instances/$instanceId'
+      path: '/instances/$instanceId'
+      fullPath: '/instances/$instanceId'
+      preLoaderRoute: typeof InstancesInstanceIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/licences/': {
+      id: '/licences/'
+      path: '/licences'
+      fullPath: '/licences/'
+      preLoaderRoute: typeof LicencesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/licences/$licenceId': {
+      id: '/licences/$licenceId'
+      path: '/licences/$licenceId'
+      fullPath: '/licences/$licenceId'
+      preLoaderRoute: typeof LicencesLicenceIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/organisations/$orgId': {
+      id: '/admin/organisations/$orgId'
+      path: '/admin/organisations/$orgId'
+      fullPath: '/admin/organisations/$orgId'
+      preLoaderRoute: typeof AdminOrganisationsOrgIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AcceptInviteRoute: AcceptInviteRoute,
+  DownloadsRoute: DownloadsRoute,
   LoginRoute: LoginRoute,
+  NotificationsRoute: NotificationsRoute,
   SignupRoute: SignupRoute,
+  TeamRoute: TeamRoute,
   VerifyEmailRoute: VerifyEmailRoute,
+  AdminAuditRoute: AdminAuditRoute,
+  AdminReleasesRoute: AdminReleasesRoute,
+  InstancesInstanceIdRoute: InstancesInstanceIdRoute,
+  LicencesLicenceIdRoute: LicencesLicenceIdRoute,
+  AdminIndexRoute: AdminIndexRoute,
+  InstancesIndexRoute: InstancesIndexRoute,
+  LicencesIndexRoute: LicencesIndexRoute,
+  AdminOrganisationsOrgIdRoute: AdminOrganisationsOrgIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

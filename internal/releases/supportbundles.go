@@ -6,12 +6,16 @@ package releases
 
 import (
 	"database/sql"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/technofish-au/sp-portal/internal/audit"
 	"github.com/technofish-au/sp-portal/internal/db/dbq"
@@ -103,4 +107,87 @@ func (s *service) uploadSupportBundle(w http.ResponseWriter, r *http.Request) {
 		"size_bytes": size,
 		"expires_at": expires,
 	})
+}
+
+// --- staff access hooks (R5-5) -------------------------------------------
+// The staff admin UI for bundles lands in a later wave; these are the
+// audited list/download endpoints it will call.
+
+// bundleView is the staff view of a support_bundles row.
+func bundleView(b dbq.SupportBundle) map[string]any {
+	return map[string]any{
+		"id":          b.ID,
+		"org_id":      b.OrgID,
+		"instance_id": b.InstanceID,
+		"size_bytes":  b.SizeBytes,
+		"uploaded_by": b.UploadedBy,
+		"uploaded_at": b.UploadedAt,
+		"expires_at":  b.ExpiresAt,
+	}
+}
+
+// listSupportBundles handles GET /v1/admin/support-bundles?org_id&limit&
+// offset — the staff browse endpoint (” org lists all orgs).
+func (s *service) listSupportBundles(w http.ResponseWriter, r *http.Request) {
+	org := r.URL.Query().Get("org_id")
+	limit := queryInt(r, "limit", 100)
+	if limit < 1 || limit > 500 {
+		limit = 100
+	}
+	offset := queryInt(r, "offset", 0)
+	if offset < 0 {
+		offset = 0
+	}
+	bundles, err := s.q.ListSupportBundles(r.Context(), dbq.ListSupportBundlesParams{
+		Column1: org, OrgID: org,
+		Limit: int32(limit), Offset: int32(offset),
+	})
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal", "bundle list failed")
+		return
+	}
+	out := make([]map[string]any, 0, len(bundles))
+	for _, b := range bundles {
+		out = append(out, bundleView(b))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"bundles": out})
+}
+
+// downloadSupportBundle handles GET /v1/admin/support-bundles/{id}/
+// download: streams the stored archive to staff and audit-logs the
+// access (support_bundle.downloaded) — bundle reads are always
+// attributable.
+func (s *service) downloadSupportBundle(w http.ResponseWriter, r *http.Request) {
+	b, err := s.q.GetSupportBundle(r.Context(), chi.URLParam(r, "bundleID"))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErr(w, http.StatusNotFound, "not_found", "no such support bundle")
+		} else {
+			writeErr(w, http.StatusInternalServerError, "internal", "bundle lookup failed")
+		}
+		return
+	}
+	path, ok := s.storagePath(storage.SupportBundles, b.Path)
+	if !ok || b.Path == "" {
+		writeErr(w, http.StatusNotFound, "no_artifact", "bundle has no file on record")
+		return
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "no_artifact", "bundle file missing")
+		return
+	}
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "internal", "bundle stat failed")
+		return
+	}
+	s.logAudit(r, ActionSupportDownloaded, "support_bundle", b.ID, map[string]any{
+		"org_id": b.OrgID, "size_bytes": b.SizeBytes,
+	})
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition",
+		fmt.Sprintf("attachment; filename=%q", filepath.Base(b.Path)))
+	http.ServeContent(w, r, filepath.Base(b.Path), info.ModTime(), f)
 }

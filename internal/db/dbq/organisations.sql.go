@@ -148,6 +148,60 @@ func (q *Queries) ListOrganisations(ctx context.Context, arg ListOrganisationsPa
 	return items, nil
 }
 
+const searchOrganisations = `-- name: SearchOrganisations :many
+SELECT id, name, slug, billing_email, stripe_customer_id, created_at, updated_at, tax_id
+  FROM organisations
+ WHERE name LIKE ? OR slug LIKE ? OR billing_email LIKE ? OR id = ?
+ ORDER BY name LIMIT ?
+`
+
+type SearchOrganisationsParams struct {
+	Name         string
+	Slug         string
+	BillingEmail string
+	ID           string
+	Limit        int32
+}
+
+// Staff search: name/slug/billing-email substring, or an exact org id.
+func (q *Queries) SearchOrganisations(ctx context.Context, arg SearchOrganisationsParams) ([]Organisation, error) {
+	rows, err := q.db.QueryContext(ctx, searchOrganisations,
+		arg.Name,
+		arg.Slug,
+		arg.BillingEmail,
+		arg.ID,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Organisation{}
+	for rows.Next() {
+		var i Organisation
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.BillingEmail,
+			&i.StripeCustomerID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.TaxID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setOrganisationStripeCustomer = `-- name: SetOrganisationStripeCustomer :exec
 UPDATE organisations SET stripe_customer_id = ? WHERE id = ?
 `

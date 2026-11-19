@@ -14,12 +14,14 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/technofish-au/sp-portal/internal/accounts"
+	"github.com/technofish-au/sp-portal/internal/admin"
 	"github.com/technofish-au/sp-portal/internal/billing"
 	"github.com/technofish-au/sp-portal/internal/config"
 	"github.com/technofish-au/sp-portal/internal/healthz"
 	"github.com/technofish-au/sp-portal/internal/jobs"
 	"github.com/technofish-au/sp-portal/internal/licensing"
 	"github.com/technofish-au/sp-portal/internal/mailer"
+	"github.com/technofish-au/sp-portal/internal/portal"
 	"github.com/technofish-au/sp-portal/internal/releases"
 	"github.com/technofish-au/sp-portal/internal/version"
 	"github.com/technofish-au/sp-portal/internal/webui"
@@ -117,16 +119,19 @@ func NewRouter(deps Deps) http.Handler {
 	r.Route("/v1", func(r chi.Router) {
 		r.Mount("/", accounts.Routes(acct))
 		r.Mount("/billing", billing.Routes(acct, bill))
-		// r.Mount("/licences", licences.Routes(deps))
-		// r.Mount("/instances", instances.Routes(deps))
 		// Licensing owns /activations, /check-ins, /licence and
 		// /offline/activations; it registers directly on this mux since
 		// chi refuses two Mount("/") calls (accounts holds the root).
 		licensing.Mount(r, deps.DB, deps.Logger, deps.Licensing)
-		// Releases owns /admin/releases*, /admin/offline-bundles,
-		// /admin/storage/prune, /releases/download-urls,
-		// /releases/{id}/download and /support-bundles.
+		// Portal owns the customer views /licences* and /instances*.
+		portal.Mount(r, deps.DB, acct)
+		// Releases owns /releases* (catalogue, download-urls, downloads),
+		// /support-bundles and /admin/releases* + /admin/offline-bundles +
+		// /admin/storage/prune + /admin/support-bundles*.
 		releases.Mount(r, deps.DB, deps.Logger, acct, relOpts)
+		// Admin owns /admin/search, /admin/organisations/*,
+		// /admin/licences*, /admin/estate and /admin/audit-log.
+		admin.Mount(r, deps.DB, acct)
 	})
 
 	// The embedded web UI catches everything else (SPA fallback lives in

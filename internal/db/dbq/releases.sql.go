@@ -167,6 +167,29 @@ func (q *Queries) GetReleaseByVersion(ctx context.Context, arg GetReleaseByVersi
 	return i, err
 }
 
+const getSupportBundle = `-- name: GetSupportBundle :one
+SELECT id, org_id, instance_id, path, size_bytes, uploaded_by,
+       uploaded_at, expires_at, created_at
+  FROM support_bundles WHERE id = ?
+`
+
+func (q *Queries) GetSupportBundle(ctx context.Context, id string) (SupportBundle, error) {
+	row := q.db.QueryRowContext(ctx, getSupportBundle, id)
+	var i SupportBundle
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.InstanceID,
+		&i.Path,
+		&i.SizeBytes,
+		&i.UploadedBy,
+		&i.UploadedAt,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const insertRelease = `-- name: InsertRelease :exec
 INSERT INTO releases (id, version, component, channel, notes,
                       min_upgrade_from, artifact_path, sha256, size_bytes)
@@ -262,6 +285,56 @@ func (q *Queries) InsertSupportBundle(ctx context.Context, arg InsertSupportBund
 	return err
 }
 
+const listPublishedReleases = `-- name: ListPublishedReleases :many
+
+SELECT id, version, component, channel, notes, artifact_path, sha256,
+       size_bytes, published_at, created_at, updated_at,
+       min_upgrade_from, security, withdrawn_at
+  FROM releases
+ WHERE published_at IS NOT NULL AND withdrawn_at IS NULL
+ ORDER BY published_at DESC, id DESC
+`
+
+// Customer catalogue + staff support-bundle hooks (R5-5).
+// The customer downloads catalogue: published and not withdrawn.
+func (q *Queries) ListPublishedReleases(ctx context.Context) ([]Release, error) {
+	rows, err := q.db.QueryContext(ctx, listPublishedReleases)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Release{}
+	for rows.Next() {
+		var i Release
+		if err := rows.Scan(
+			&i.ID,
+			&i.Version,
+			&i.Component,
+			&i.Channel,
+			&i.Notes,
+			&i.ArtifactPath,
+			&i.Sha256,
+			&i.SizeBytes,
+			&i.PublishedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.MinUpgradeFrom,
+			&i.Security,
+			&i.WithdrawnAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listReleaseArtifactPaths = `-- name: ListReleaseArtifactPaths :many
 SELECT artifact_path FROM releases WHERE artifact_path <> ''
 `
@@ -326,6 +399,60 @@ func (q *Queries) ListReleases(ctx context.Context, arg ListReleasesParams) ([]R
 			&i.MinUpgradeFrom,
 			&i.Security,
 			&i.WithdrawnAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSupportBundles = `-- name: ListSupportBundles :many
+SELECT id, org_id, instance_id, path, size_bytes, uploaded_by,
+       uploaded_at, expires_at, created_at
+  FROM support_bundles
+ WHERE (? = '' OR org_id = ?)
+ ORDER BY uploaded_at DESC, id DESC LIMIT ? OFFSET ?
+`
+
+type ListSupportBundlesParams struct {
+	Column1 interface{}
+	OrgID   string
+	Limit   int32
+	Offset  int32
+}
+
+// Staff support-bundle list (” org disables the filter).
+func (q *Queries) ListSupportBundles(ctx context.Context, arg ListSupportBundlesParams) ([]SupportBundle, error) {
+	rows, err := q.db.QueryContext(ctx, listSupportBundles,
+		arg.Column1,
+		arg.OrgID,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SupportBundle{}
+	for rows.Next() {
+		var i SupportBundle
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.InstanceID,
+			&i.Path,
+			&i.SizeBytes,
+			&i.UploadedBy,
+			&i.UploadedAt,
+			&i.ExpiresAt,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

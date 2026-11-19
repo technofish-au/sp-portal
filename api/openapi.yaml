@@ -287,21 +287,143 @@ paths:
         "400": { description: Unknown plan }
         "503": { description: Stripe not configured }
 
-  # --- Later waves: the versioned surface (no handlers yet) -------------
+  # --- Customer portal surface (R5-5) -------------------------------------
+
+  /v1/auth/accept-invite:
+    post:
+      tags: [auth]
+      summary: Consume a team invite (public)
+      description: |
+        Body {token, password?, display_name?}. A fresh invited user
+        must supply a password (8+ chars); the email is marked verified
+        and a full session is issued. An existing account's token is a
+        no-op confirmation.
+      responses:
+        "200": { description: Accepted; session cookie set }
+        "400": { description: bad_token / validation }
+  /v1/organisations/{orgId}/invites:
+    post:
+      tags: [organisations]
+      summary: Invite a member to the org (owner/admin)
+      description: |
+        Body {email, display_name?, role}. Creates the user row when
+        needed plus the membership, then emails an accept-invite link.
+      responses:
+        "201": { description: Invited }
+        "403": { description: Not owner/admin }
+        "409": { description: already_member }
+  /v1/organisations/{orgId}/members/{userId}:
+    patch:
+      tags: [organisations]
+      summary: Change a member's role (owner/admin)
+      description: Body {role}. The org's last owner cannot be demoted.
+      responses:
+        "200": { description: Updated }
+        "409": { description: last owner }
+    delete:
+      tags: [organisations]
+      summary: Remove a member (owner/admin)
+      description: The org's last owner cannot be removed.
+      responses:
+        "204": { description: Removed }
+        "409": { description: last owner }
+  /v1/organisations/{orgId}/notification-prefs:
+    get:
+      tags: [organisations]
+      summary: My notification preferences for the org
+      responses:
+        "200": { description: prefs (defaults when unset) }
+    put:
+      tags: [organisations]
+      summary: Update my notification preferences
+      description: |
+        Body {notify_version_behind, notify_security_release,
+        notify_licence_expiry, notify_billing}. Billing mail is never
+        opt-out — the flag is forced on.
+      responses:
+        "200": { description: Saved }
   /v1/licences:
     get:
       tags: [licences]
-      summary: List issued licences (placeholder)
-      description: Stub — implemented in a later wave.
+      summary: List the org's licences (member)
+      description: |
+        ?org_id= — each row carries licence_key, kind, plan,
+        max_instances, seats_used, computed status
+        (active|expired|revoked), doc_issued/doc_hash, expiry.
+      parameters:
+        - { name: org_id, in: query, required: true, schema: { type: string } }
       responses:
-        "501": { description: Not implemented }
+        "200": { description: licences[] }
+        "403": { description: Not a member }
+  /v1/licences/{licenceId}:
+    get:
+      tags: [licences]
+      summary: Licence detail + bound instances (member)
+      parameters:
+        - { name: licenceId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: licence + instances }
+        "403": { description: Not a member }
+        "404": { description: not_found }
   /v1/instances:
     get:
       tags: [instances]
-      summary: List registered appliances (placeholder)
-      description: Stub — implemented in a later wave.
+      summary: List the org's registered appliances (member)
+      description: |
+        ?org_id= — name, fingerprint instance_id, appliance_version,
+        status, suspected_clone, last_seen_at, licence_key.
+      parameters:
+        - { name: org_id, in: query, required: true, schema: { type: string } }
       responses:
-        "501": { description: Not implemented }
+        "200": { description: instances[] }
+        "403": { description: Not a member }
+  /v1/instances/{instanceId}:
+    get:
+      tags: [instances]
+      summary: Instance detail + bound licence (member)
+      parameters:
+        - { name: instanceId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: instance + licence }
+        "403": { description: Not a member }
+        "404": { description: not_found }
+  /v1/instances/{instanceId}/reports:
+    get:
+      tags: [instances]
+      summary: Check-in history from instance_reports (member)
+      parameters:
+        - { name: instanceId, in: path, required: true, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
+      responses:
+        "200": { description: reports[] newest first }
+  /v1/instances/{instanceId}/deactivate:
+    post:
+      tags: [instances]
+      summary: Decommission an appliance, freeing its seat (non-viewer)
+      responses:
+        "200": { description: Deactivated instance }
+        "403": { description: Viewer role }
+  /v1/releases:
+    get:
+      tags: [releases]
+      summary: Published release catalogue (customer session)
+      description: Lists published, non-withdrawn releases.
+      responses:
+        "200": { description: releases[] }
+        "401": { description: Not authenticated }
+  /v1/releases/{releaseId}/download-url:
+    post:
+      tags: [releases]
+      summary: Mint a signed download URL (customer session)
+      description: |
+        Body {org_id}; the caller must be an org member and the org's
+        licences carry the entitlement — the same older-versions rule
+        as the appliance mint applies.
+      responses:
+        "201": { description: Signed URL }
+        "403": { description: no_licence / entitlement_expired / not a member }
+        "404": { description: not_found }
+        "409": { description: not_published }
   # --- Release catalogue + distribution (R5-4; contract docs are
   # --- docs/fakeportal.md and docs/offline-bundles.md) ------------------
 
@@ -435,6 +557,88 @@ paths:
         "401": { description: instance authentication failed }
         "413": { description: body_too_large }
         "415": { description: unsupported_media_type }
+
+  # --- Staff admin (R5-5; session + is_platform_admin + TOTP) -------------
+
+  /v1/admin/search:
+    get:
+      tags: [releases]
+      summary: Staff cross-tenant search
+      description: |
+        ?q= — substring match across organisations (name/slug/billing
+        email), users (email/display name), licences (key) and
+        instances (name/fingerprint); 20 rows per section.
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: organisations/users/licences/instances }
+        "403": { description: Not staff / TOTP required }
+  /v1/admin/organisations/{orgId}:
+    get:
+      tags: [releases]
+      summary: Staff org drill-down
+      responses:
+        "200": { description: org + members + licences + instances + subscription }
+        "404": { description: not_found }
+  /v1/admin/licences:
+    post:
+      tags: [releases]
+      summary: Issue a manual licence (staff)
+      description: |
+        Body {org_id, kind?, plan?, max_instances?, expires_at?};
+        expires_at is RFC3339, empty means never.
+      responses:
+        "201": { description: Issued licence }
+  /v1/admin/licences/{licenceId}/revoke:
+    post:
+      tags: [releases]
+      summary: Revoke a licence (staff, idempotent)
+      responses:
+        "200": { description: Revoked licence }
+        "404": { description: not_found }
+  /v1/admin/licences/{licenceId}/reissue:
+    post:
+      tags: [releases]
+      summary: Mint a replacement key and revoke the original (staff)
+      responses:
+        "201": { description: licence + supersedes }
+        "404": { description: not_found }
+  /v1/admin/estate:
+    get:
+      tags: [releases]
+      summary: Fleet estate view (staff)
+      description: Headline totals plus live instance count per version.
+      responses:
+        "200": { description: totals + versions }
+  /v1/admin/audit-log:
+    get:
+      tags: [releases]
+      summary: Audit log browse (staff)
+      parameters:
+        - { name: org_id, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 100 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        "200": { description: entries[] newest first }
+  /v1/admin/support-bundles:
+    get:
+      tags: [releases]
+      summary: List uploaded support bundles (staff hook)
+      parameters:
+        - { name: org_id, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 100 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        "200": { description: bundles[] }
+  /v1/admin/support-bundles/{bundleId}/download:
+    get:
+      tags: [releases]
+      summary: Download a support bundle (staff hook, audit-logged)
+      parameters:
+        - { name: bundleId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Bundle bytes }
+        "404": { description: not_found / no_artifact }
   /apt/{path}:
     get:
       tags: [releases]

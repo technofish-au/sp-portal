@@ -132,14 +132,17 @@ func insertAptToken(t *testing.T, db *sql.DB, orgID, password string) {
 }
 
 // staffCookie mints a session cookie for an is_platform_admin user.
+// RequireStaff demands TOTP, so the test user is created already
+// enrolled (loginStage forces real staff through enrolment first).
 func staffCookie(t *testing.T, db *sql.DB, acct *accounts.Service, admin bool) *http.Cookie {
 	t.Helper()
 	u := dbq.User{ID: uuid.Must(uuid.NewV7()).String()}
 	u.Email = "user-" + u.ID[len(u.ID)-8:] + "@test.dev"
 	u.IsPlatformAdmin = admin
+	u.TotpEnabled = admin // staff must enrol before hitting /admin/*
 	if _, err := db.Exec(
-		`INSERT INTO users (id, email, display_name, password_hash, is_platform_admin)
-		 VALUES (?, ?, 'Test User', '', ?)`, u.ID, u.Email, admin); err != nil {
+		`INSERT INTO users (id, email, display_name, password_hash, is_platform_admin, totp_enabled)
+		 VALUES (?, ?, 'Test User', '', ?, ?)`, u.ID, u.Email, admin, admin); err != nil {
 		t.Fatalf("insert user: %v", err)
 	}
 	token, err := acct.EncodeSession(accounts.Session{User: u, Stage: accounts.StageFull})

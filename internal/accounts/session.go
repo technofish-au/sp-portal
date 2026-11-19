@@ -262,3 +262,30 @@ func RequirePending(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// RequireStaff returns middleware that only lets fully authenticated
+// platform-admin sessions with TOTP enabled through — the gate every
+// /v1/admin/* endpoint sits behind. TOTP enrolment itself stays on
+// RequireSession so a brand-new staff account can still enrol.
+func RequireStaff(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sess, ok := SessionFrom(r.Context())
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "not_authenticated", "sign-in required")
+			return
+		}
+		if !sess.Full() {
+			writeError(w, http.StatusForbidden, "auth_incomplete", fmt.Sprintf("session pending %s", sess.Stage))
+			return
+		}
+		if !sess.User.IsPlatformAdmin {
+			writeError(w, http.StatusForbidden, "forbidden", "platform admin required")
+			return
+		}
+		if !sess.User.TotpEnabled {
+			writeError(w, http.StatusForbidden, "totp_required", "staff accounts must enable TOTP")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}

@@ -106,3 +106,59 @@ func (q *Queries) ListAuditByOrg(ctx context.Context, arg ListAuditByOrgParams) 
 	}
 	return items, nil
 }
+
+const listAuditLog = `-- name: ListAuditLog :many
+SELECT id, org_id, actor_user_id, actor_email, action, target_type,
+       target_id, detail, ip, created_at
+  FROM audit_log
+ WHERE (? = '' OR org_id = ?)
+ ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?
+`
+
+type ListAuditLogParams struct {
+	Column1 interface{}
+	OrgID   sql.NullString
+	Limit   int32
+	Offset  int32
+}
+
+// Staff audit view: newest first, optionally narrowed to one org
+// (” disables the filter).
+func (q *Queries) ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]AuditLog, error) {
+	rows, err := q.db.QueryContext(ctx, listAuditLog,
+		arg.Column1,
+		arg.OrgID,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AuditLog{}
+	for rows.Next() {
+		var i AuditLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.ActorUserID,
+			&i.ActorEmail,
+			&i.Action,
+			&i.TargetType,
+			&i.TargetID,
+			&i.Detail,
+			&i.Ip,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
