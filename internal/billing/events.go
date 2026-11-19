@@ -196,9 +196,14 @@ func (d Deps) onCheckoutCompleted(ctx context.Context, q *dbq.Queries, ev dbq.St
 	}
 	detail := map[string]any{"session_id": o.ID, "stripe_event_id": ev.EventID, "customer": o.Customer}
 	if len(o.CustomerDetails.TaxIDs) > 0 {
-		// Schema note: organisations has no tax-id column — collected
-		// ids (e.g. au_abn) are recorded in the audit detail only.
 		detail["tax_ids"] = o.CustomerDetails.TaxIDs
+		for _, t := range o.CustomerDetails.TaxIDs {
+			if t.Type == "au_abn" && t.Value != "" && org.TaxID != t.Value {
+				if err := q.SetOrganisationTaxID(ctx, dbq.SetOrganisationTaxIDParams{ID: org.ID, TaxID: t.Value}); err != nil {
+					return fmt.Errorf("billing: set org tax id: %w", err)
+				}
+			}
+		}
 	}
 	return audit.Write(ctx, q, audit.Entry{
 		OrgID: org.ID, ActorEmail: o.CustomerDetails.Email, Action: audit.ActionCheckoutDone,
@@ -337,7 +342,7 @@ func (d Deps) onInvoicePaid(ctx context.Context, q *dbq.Queries, ev dbq.StripeEv
 	}
 	if o.Subscription != "" {
 		if sub, err := q.GetSubscriptionByStripeID(ctx, sqlString(o.Subscription)); err == nil {
-			if sub.Status == "past_due" || sub.Status == "unpaid" {
+			if sub.Status == "past_due" || sub.Status == "suspended" || sub.Status == "unpaid" {
 				if err := q.UpdateSubscriptionState(ctx, dbq.UpdateSubscriptionStateParams{
 					ID: sub.ID, StripeSubscriptionID: sub.StripeSubscriptionID,
 					StripePriceID: sub.StripePriceID, Plan: sub.Plan, Status: "active",
@@ -440,10 +445,17 @@ func (d Deps) onCustomerUpdated(ctx context.Context, q *dbq.Queries, ev dbq.Stri
 		}
 	}
 	detail := map[string]any{"stripe_event_id": ev.EventID, "stripe_customer_id": o.ID}
-	if abn := abnOf(o); abn != "" {
-		detail["abn"] = abn // no org column for ABN — recorded here
+	abn := abnOf(o)
+	if abn != "" {
+		detail["abn"] = abn
+		if org.TaxID != abn {
+			if err := q.SetOrganisationTaxID(ctx, dbq.SetOrganisationTaxIDParams{ID: org.ID, TaxID: abn}); err != nil {
+				return fmt.Errorf("billing: set org tax id: %w", err)
+			}
+			changed = true
+		}
 	}
-	if !changed && abnOf(o) == "" {
+	if !changed {
 		return nil // nothing material changed
 	}
 	return audit.Write(ctx, q, audit.Entry{

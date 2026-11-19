@@ -44,7 +44,7 @@ func (q *Queries) CreateOrganisation(ctx context.Context, arg CreateOrganisation
 }
 
 const getOrganisation = `-- name: GetOrganisation :one
-SELECT id, name, slug, billing_email, stripe_customer_id, created_at, updated_at
+SELECT id, name, slug, billing_email, stripe_customer_id, created_at, updated_at, tax_id
   FROM organisations WHERE id = ?
 `
 
@@ -59,12 +59,13 @@ func (q *Queries) GetOrganisation(ctx context.Context, id string) (Organisation,
 		&i.StripeCustomerID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TaxID,
 	)
 	return i, err
 }
 
 const getOrganisationBySlug = `-- name: GetOrganisationBySlug :one
-SELECT id, name, slug, billing_email, stripe_customer_id, created_at, updated_at
+SELECT id, name, slug, billing_email, stripe_customer_id, created_at, updated_at, tax_id
   FROM organisations WHERE slug = ?
 `
 
@@ -79,12 +80,13 @@ func (q *Queries) GetOrganisationBySlug(ctx context.Context, slug string) (Organ
 		&i.StripeCustomerID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TaxID,
 	)
 	return i, err
 }
 
 const getOrganisationByStripeCustomer = `-- name: GetOrganisationByStripeCustomer :one
-SELECT id, name, slug, billing_email, stripe_customer_id, created_at, updated_at
+SELECT id, name, slug, billing_email, stripe_customer_id, created_at, updated_at, tax_id
   FROM organisations WHERE stripe_customer_id = ?
 `
 
@@ -99,12 +101,13 @@ func (q *Queries) GetOrganisationByStripeCustomer(ctx context.Context, stripeCus
 		&i.StripeCustomerID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TaxID,
 	)
 	return i, err
 }
 
 const listOrganisations = `-- name: ListOrganisations :many
-SELECT id, name, slug, billing_email, stripe_customer_id, created_at, updated_at
+SELECT id, name, slug, billing_email, stripe_customer_id, created_at, updated_at, tax_id
   FROM organisations ORDER BY name, id LIMIT ? OFFSET ?
 `
 
@@ -130,6 +133,7 @@ func (q *Queries) ListOrganisations(ctx context.Context, arg ListOrganisationsPa
 			&i.StripeCustomerID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.TaxID,
 		); err != nil {
 			return nil, err
 		}
@@ -155,6 +159,20 @@ type SetOrganisationStripeCustomerParams struct {
 
 func (q *Queries) SetOrganisationStripeCustomer(ctx context.Context, arg SetOrganisationStripeCustomerParams) error {
 	_, err := q.db.ExecContext(ctx, setOrganisationStripeCustomer, arg.StripeCustomerID, arg.ID)
+	return err
+}
+
+const setOrganisationTaxID = `-- name: SetOrganisationTaxID :exec
+UPDATE organisations SET tax_id = ? WHERE id = ?
+`
+
+type SetOrganisationTaxIDParams struct {
+	TaxID string
+	ID    string
+}
+
+func (q *Queries) SetOrganisationTaxID(ctx context.Context, arg SetOrganisationTaxIDParams) error {
+	_, err := q.db.ExecContext(ctx, setOrganisationTaxID, arg.TaxID, arg.ID)
 	return err
 }
 

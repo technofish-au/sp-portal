@@ -4,9 +4,11 @@
 // cookie signature is bound to the user's credential fingerprint), TOTP
 // (optional for members, required for owners) and org membership roles.
 //
-// Schema note: users has no email_verified column and there is no
-// sessions table — verification is recorded as an auth.email_verified
-// audit_log row and sessions are stateless signed cookies.
+// Schema note: there is no sessions table — sessions are stateless
+// signed cookies bound to the credential fingerprint (credential change
+// or disable kills them). Verification state lives on
+// users.email_verified_at; the auth.email_verified audit row records
+// the event.
 package accounts
 
 import (
@@ -440,10 +442,10 @@ func (s *Service) TOTPDisable(ctx context.Context, sess Session, code, ip string
 	return nil
 }
 
-// VerifyEmail consumes a verification token and records the
-// auth.email_verified audit row (the schema has no email_verified
-// column). Replays are idempotent — a second use of the same token is a
-// no-op.
+// VerifyEmail consumes a verification token and stamps
+// users.email_verified_at (plus the auth.email_verified audit row as
+// the event record). Replays are idempotent — a second use of the same
+// token is a no-op.
 func (s *Service) VerifyEmail(ctx context.Context, token, ip string) error {
 	uid, email, err := s.parseVerifyToken(token)
 	if err != nil {
@@ -453,12 +455,11 @@ func (s *Service) VerifyEmail(ctx context.Context, token, ip string) error {
 	if err != nil || u.Email != email {
 		return ErrBadToken
 	}
-	done, err := s.q.CountAuditActions(ctx, dbq.CountAuditActionsParams{ActorUserID: sqlNull(u.ID), Action: audit.ActionEmailVerified})
-	if err != nil {
-		return fmt.Errorf("verify email: %w", err)
-	}
-	if done > 0 {
+	if u.EmailVerifiedAt != nil {
 		return nil // already verified — idempotent
+	}
+	if err := s.q.SetUserEmailVerified(ctx, u.ID); err != nil {
+		return fmt.Errorf("verify email: %w", err)
 	}
 	return audit.Write(ctx, s.q, audit.Entry{
 		ActorUserID: u.ID, ActorEmail: u.Email, Action: audit.ActionEmailVerified,
@@ -466,10 +467,13 @@ func (s *Service) VerifyEmail(ctx context.Context, token, ip string) error {
 	})
 }
 
-// EmailVerified reports whether the auth.email_verified audit row exists.
+// EmailVerified reports whether users.email_verified_at is set.
 func (s *Service) EmailVerified(ctx context.Context, userID string) (bool, error) {
-	n, err := s.q.CountAuditActions(ctx, dbq.CountAuditActionsParams{ActorUserID: sqlNull(userID), Action: audit.ActionEmailVerified})
-	return n > 0, err
+	u, err := s.q.GetUser(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	return u.EmailVerifiedAt != nil, nil
 }
 
 // issueVerifyToken returns the email-verification link token.

@@ -50,9 +50,24 @@ SELECT id, org_id, subscription_id, licence_key, kind, plan, max_instances,
   FROM licences WHERE licence_key = ?
 `
 
-func (q *Queries) GetLicenceByKey(ctx context.Context, licenceKey string) (Licence, error) {
+type GetLicenceByKeyRow struct {
+	ID             string
+	OrgID          string
+	SubscriptionID sql.NullString
+	LicenceKey     string
+	Kind           string
+	Plan           string
+	MaxInstances   int32
+	IssuedAt       time.Time
+	ExpiresAt      *time.Time
+	RevokedAt      *time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+func (q *Queries) GetLicenceByKey(ctx context.Context, licenceKey string) (GetLicenceByKeyRow, error) {
 	row := q.db.QueryRowContext(ctx, getLicenceByKey, licenceKey)
-	var i Licence
+	var i GetLicenceByKeyRow
 	err := row.Scan(
 		&i.ID,
 		&i.OrgID,

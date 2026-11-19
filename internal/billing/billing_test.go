@@ -319,7 +319,7 @@ func TestSubscriptionStateMachine(t *testing.T) {
 }
 
 // TestSuspendAfterGrace is acceptance: a subscription past_due beyond the
-// 14-day grace is suspended (status -> unpaid) with an audit row.
+// 14-day grace is suspended (status -> suspended) with an audit row.
 func TestSuspendAfterGrace(t *testing.T) {
 	db := testutil.MariaDB(t)
 	d := testDeps(db, &stubStripe{}, "")
@@ -335,8 +335,8 @@ func TestSuspendAfterGrace(t *testing.T) {
 	if err := d.SuspendSweepHandler()(ctx, jobs.Job{}); err != nil {
 		t.Fatalf("sweep: %v", err)
 	}
-	if got := subStatus(t, db, subID); got != "unpaid" {
-		t.Fatalf("status = %q, want unpaid (suspended)", got)
+	if got := subStatus(t, db, subID); got != "suspended" {
+		t.Fatalf("status = %q, want suspended", got)
 	}
 	if n := countAudit(t, db, audit.ActionSubSuspended); n != 1 {
 		t.Fatalf("suspension audits = %d, want 1", n)

@@ -101,7 +101,7 @@ type Config struct {
 	TrialMaxMachines int `koanf:"trial_max_machines"`
 
 	// Billing: a subscription stuck in past_due for longer than
-	// past_due_grace is suspended (moved to unpaid) by the sweep that runs
+	// past_due_grace is suspended by the sweep that runs
 	// every suspend_sweep_interval.
 	PastDueGrace         time.Duration `koanf:"past_due_grace"`
 	SuspendSweepInterval time.Duration `koanf:"suspend_sweep_interval"`

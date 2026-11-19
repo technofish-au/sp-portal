@@ -11,9 +11,8 @@ import (
 )
 
 // KindSuspendSweep is the self-rescheduling job that suspends
-// subscriptions which stayed past_due beyond PastDueGrace. The schema's
-// status enum has no 'suspended' value — the post-grace state is 'unpaid'
-// and the audit action records the suspension.
+// subscriptions which stayed past_due beyond PastDueGrace (status
+// 'suspended'; 'unpaid' stays reserved for Stripe-side terminal state).
 const KindSuspendSweep = "billing.suspend_sweep"
 
 // SuspendSweepHandler returns the sweep job handler. Each run marks
@@ -59,7 +58,7 @@ func (d Deps) SeedSweep(ctx context.Context) error {
 }
 
 // sweep marks every subscription still past_due after the grace period as
-// unpaid (suspended) with an audit row and a notification email per org.
+// suspended, with an audit row and a notification email per org.
 func (d Deps) sweep(ctx context.Context) error {
 	q := d.queries()
 	cutoff := d.now().Add(-d.PastDueGrace)
@@ -70,7 +69,7 @@ func (d Deps) sweep(ctx context.Context) error {
 	for _, sub := range subs {
 		if err := q.UpdateSubscriptionState(ctx, dbq.UpdateSubscriptionStateParams{
 			ID: sub.ID, StripeSubscriptionID: sub.StripeSubscriptionID,
-			StripePriceID: sub.StripePriceID, Plan: sub.Plan, Status: "unpaid",
+			StripePriceID: sub.StripePriceID, Plan: sub.Plan, Status: "suspended",
 			Seats: sub.Seats, CurrentPeriodStart: sub.CurrentPeriodStart,
 			CurrentPeriodEnd: sub.CurrentPeriodEnd, CancelAt: sub.CancelAt,
 		}); err != nil {
@@ -80,7 +79,7 @@ func (d Deps) sweep(ctx context.Context) error {
 			OrgID: sub.OrgID, Action: audit.ActionSubSuspended,
 			TargetType: "subscription", TargetID: sub.ID,
 			Detail: map[string]any{
-				"from": sub.Status, "to": "unpaid",
+				"from": sub.Status, "to": "suspended",
 				"grace_hours": int(d.PastDueGrace.Hours()), "sweep": true,
 			},
 		}); err != nil {

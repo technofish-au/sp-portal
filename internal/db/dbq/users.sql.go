@@ -36,7 +36,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 
 const getUser = `-- name: GetUser :one
 SELECT id, email, display_name, password_hash, is_platform_admin,
-       totp_secret_enc, totp_enabled, disabled_at, created_at, updated_at
+       totp_secret_enc, totp_enabled, disabled_at,
+       created_at, updated_at, email_verified_at
   FROM users WHERE id = ?
 `
 
@@ -54,13 +55,15 @@ func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
 		&i.DisabledAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EmailVerifiedAt,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, email, display_name, password_hash, is_platform_admin,
-       totp_secret_enc, totp_enabled, disabled_at, created_at, updated_at
+       totp_secret_enc, totp_enabled, disabled_at,
+       created_at, updated_at, email_verified_at
   FROM users WHERE email = ?
 `
 
@@ -78,6 +81,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.DisabledAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EmailVerifiedAt,
 	)
 	return i, err
 }
@@ -121,6 +125,16 @@ func (q *Queries) ListOrgMembers(ctx context.Context, orgID string) ([]ListOrgMe
 		return nil, err
 	}
 	return items, nil
+}
+
+const setUserEmailVerified = `-- name: SetUserEmailVerified :exec
+UPDATE users SET email_verified_at = CURRENT_TIMESTAMP(6)
+ WHERE id = ? AND email_verified_at IS NULL
+`
+
+func (q *Queries) SetUserEmailVerified(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, setUserEmailVerified, id)
+	return err
 }
 
 const setUserTOTPEnabled = `-- name: SetUserTOTPEnabled :exec
