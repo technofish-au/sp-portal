@@ -16,3 +16,12 @@ VALUES (?, ?, ?, ?, ?);
 SELECT u.id, u.email, u.display_name, m.role
   FROM memberships m JOIN users u ON u.id = m.user_id
  WHERE m.org_id = ? ORDER BY u.email;
+
+-- name: UpdateUserPassword :exec
+UPDATE users SET password_hash = ? WHERE id = ?;
+
+-- name: SetUserTOTPSecret :exec
+UPDATE users SET totp_secret_enc = ? WHERE id = ?;
+
+-- name: SetUserTOTPEnabled :exec
+UPDATE users SET totp_enabled = ? WHERE id = ?;

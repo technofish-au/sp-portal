@@ -67,7 +67,12 @@ func runServe(ctx context.Context, stderr io.Writer) int {
 	}
 	defer func() { _ = sqlDB.Close() }()
 
-	handler := httpapi.NewRouter(httpapi.Deps{DB: sqlDB, Logger: logger})
+	deps, err := buildDeps(cfg, sqlDB, logger)
+	if err != nil {
+		logger.Error("startup failed", slog.String("error", err.Error()))
+		return ExitError
+	}
+	handler := httpapi.NewRouter(deps)
 	if err := serve(ctx, logger, cfg.HTTPAddr, handler); err != nil {
 		logger.Error("server failed", slog.String("error", err.Error()))
 		return ExitError

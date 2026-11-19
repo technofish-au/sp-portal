@@ -19,3 +19,6 @@ SELECT id, kind, payload, dedupe_key, status, attempts, max_attempts,
        run_at, claimed_by, claimed_at, last_error, created_at, updated_at,
        finished_at
   FROM jobs WHERE id = ?;
+
+-- name: CountRunnableJobsByKind :one
+SELECT COUNT(*) FROM jobs WHERE kind = ? AND status IN ('pending', 'running');

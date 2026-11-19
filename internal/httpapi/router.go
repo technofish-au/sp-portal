@@ -4,6 +4,7 @@
 package httpapi
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"log/slog"
 	"net/http"
@@ -12,7 +13,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/technofish-au/sp-portal/internal/accounts"
+	"github.com/technofish-au/sp-portal/internal/billing"
+	"github.com/technofish-au/sp-portal/internal/config"
 	"github.com/technofish-au/sp-portal/internal/healthz"
+	"github.com/technofish-au/sp-portal/internal/jobs"
+	"github.com/technofish-au/sp-portal/internal/mailer"
 	"github.com/technofish-au/sp-portal/internal/version"
 	"github.com/technofish-au/sp-portal/internal/webui"
 )
@@ -22,6 +28,17 @@ import (
 type Deps struct {
 	DB     *sql.DB
 	Logger *slog.Logger
+	Cfg    config.Config
+
+	Queue  *jobs.Queue
+	Mailer mailer.Mailer
+
+	// Resolved secrets (cli resolves the *_file config values; AuthSecret
+	// falls back to an ephemeral random key when unset).
+	AuthSecret          []byte
+	AltchaSecret        []byte
+	Stripe              billing.Client // nil = billing disabled
+	StripeWebhookSecret string
 }
 
 // NewRouter builds the portal's HTTP handler.
@@ -41,10 +58,42 @@ func NewRouter(deps Deps) http.Handler {
 	// Unversioned infrastructure endpoints.
 	r.Mount("/healthz", healthz.Routes(deps.DB, version.Get().Version))
 
+	// accounts owns /v1/auth/* and /v1/organisations* under a single
+	// wildcard mount; more specific mounts (e.g. /v1/billing) win.
+	acct := accounts.NewMust(deps.DB, accounts.Options{
+		Secret:           authSecret(deps),
+		SessionTTL:       deps.Cfg.SessionTTL,
+		SecureCookies:    deps.Cfg.SecureCookies,
+		PublicBaseURL:    deps.Cfg.PublicBaseURL,
+		AltchaSecret:     deps.AltchaSecret,
+		AltchaMaxNumber:  deps.Cfg.AltchaMaxNumber,
+		TrialDays:        deps.Cfg.TrialDays,
+		TrialMaxMachines: deps.Cfg.TrialMaxMachines,
+		Queue:            deps.Queue,
+	})
+	bill := billing.Deps{
+		DB: deps.DB, Queue: deps.Queue, Log: deps.Logger,
+		Client: deps.Stripe, WebhookSecret: deps.StripeWebhookSecret,
+		PublicBaseURL: deps.Cfg.PublicBaseURL,
+		Prices: map[string]string{
+			"starter":    deps.Cfg.StripePriceStarter,
+			"pro":        deps.Cfg.StripePricePro,
+			"enterprise": deps.Cfg.StripePriceEnterprise,
+		},
+		AutomaticTax:  deps.Cfg.StripeAutomaticTax,
+		PastDueGrace:  deps.Cfg.PastDueGrace,
+		SweepInterval: deps.Cfg.SuspendSweepInterval,
+	}
+
+	// Stripe's webhook is unversioned (POST /stripe/webhook): signature
+	// verify -> stripe_events row -> jobs row -> 200, worker does the rest.
+	r.Mount("/stripe", billing.WebhookRoutes(bill))
+
 	// Versioned API surface; domain packages mount one line each as waves
 	// land (see api/openapi.yaml for the documented shape).
 	r.Route("/v1", func(r chi.Router) {
-		// r.Mount("/organisations", organisations.Routes(deps))
+		r.Mount("/", accounts.Routes(acct))
+		r.Mount("/billing", billing.Routes(acct, bill))
 		// r.Mount("/licences", licences.Routes(deps))
 		// r.Mount("/instances", instances.Routes(deps))
 		// r.Mount("/releases", releases.Routes(deps))
@@ -54,6 +103,19 @@ func NewRouter(deps Deps) http.Handler {
 	// internal/webui).
 	r.Mount("/", webui.Handler())
 	return r
+}
+
+// authSecret returns the resolved auth secret or a per-process ephemeral
+// one (documented dev mode: sessions reset on restart).
+func authSecret(deps Deps) []byte {
+	if len(deps.AuthSecret) > 0 {
+		return deps.AuthSecret
+	}
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		panic(err)
+	}
+	return key
 }
 
 // statusRecorder captures the response status for the request log.

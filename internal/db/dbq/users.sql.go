@@ -7,6 +7,7 @@ package dbq
 
 import (
 	"context"
+	"database/sql"
 )
 
 const createUser = `-- name: CreateUser :exec
@@ -120,4 +121,46 @@ func (q *Queries) ListOrgMembers(ctx context.Context, orgID string) ([]ListOrgMe
 		return nil, err
 	}
 	return items, nil
+}
+
+const setUserTOTPEnabled = `-- name: SetUserTOTPEnabled :exec
+UPDATE users SET totp_enabled = ? WHERE id = ?
+`
+
+type SetUserTOTPEnabledParams struct {
+	TotpEnabled bool
+	ID          string
+}
+
+func (q *Queries) SetUserTOTPEnabled(ctx context.Context, arg SetUserTOTPEnabledParams) error {
+	_, err := q.db.ExecContext(ctx, setUserTOTPEnabled, arg.TotpEnabled, arg.ID)
+	return err
+}
+
+const setUserTOTPSecret = `-- name: SetUserTOTPSecret :exec
+UPDATE users SET totp_secret_enc = ? WHERE id = ?
+`
+
+type SetUserTOTPSecretParams struct {
+	TotpSecretEnc sql.NullString
+	ID            string
+}
+
+func (q *Queries) SetUserTOTPSecret(ctx context.Context, arg SetUserTOTPSecretParams) error {
+	_, err := q.db.ExecContext(ctx, setUserTOTPSecret, arg.TotpSecretEnc, arg.ID)
+	return err
+}
+
+const updateUserPassword = `-- name: UpdateUserPassword :exec
+UPDATE users SET password_hash = ? WHERE id = ?
+`
+
+type UpdateUserPasswordParams struct {
+	PasswordHash string
+	ID           string
+}
+
+func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
+	_, err := q.db.ExecContext(ctx, updateUserPassword, arg.PasswordHash, arg.ID)
+	return err
 }

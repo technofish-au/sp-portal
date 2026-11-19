@@ -19,3 +19,10 @@ UPDATE organisations SET stripe_customer_id = ? WHERE id = ?;
 
 -- name: CountOrganisations :one
 SELECT COUNT(*) FROM organisations;
+
+-- name: GetOrganisationByStripeCustomer :one
+SELECT id, name, slug, billing_email, stripe_customer_id, created_at, updated_at
+  FROM organisations WHERE stripe_customer_id = ?;
+
+-- name: UpdateOrganisationBilling :exec
+UPDATE organisations SET name = ?, billing_email = ? WHERE id = ?;

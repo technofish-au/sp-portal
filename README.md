@@ -47,11 +47,44 @@ entries (env name = `PORTAL_` + upper(key)):
 | `db_password_file`|                            | secret file, must be mode 0400/0600  |
 | `storage_dir`     | `/var/lib/sp-portal`       | releases/, apt/, offline-bundles/, … |
 | `worker_interval` | `1s`                       | job-worker poll                      |
+| `public_base_url` | `http://localhost:8080`    | external base for emails/Stripe URLs |
+| `auth_secret_file`|                            | session/TOTP/token key (ephemeral if unset) |
+| `session_ttl`     | `336h`                     | session cookie lifetime              |
+| `secure_cookies`  | `false`                    | set true behind TLS                  |
+| `altcha_secret_file` |                         | sign-up ALTCHA key; unset = captcha off (dev bypass) |
+| `trial_days` / `trial_max_machines` | `30`/`25` | sign-up trial                        |
+| `past_due_grace`  | `336h`                     | past_due -> suspended (unpaid) window |
+| `suspend_sweep_interval` | `1h`               | suspension sweep cadence             |
+| `smtp_*` / `mail_from*` |                        | outbound mail; unset host = log sink |
 | `stripe_*_file`   |                            | file-mounted Stripe secrets          |
+| `stripe_price_*`  |                            | plan -> Stripe price ids             |
+| `stripe_automatic_tax` | `false`               | Stripe Tax on checkout/invoices      |
 
-Secret files (`db_password_file`, `stripe_secret_key_file`,
+Secret files (`db_password_file`, `auth_secret_file`, `altcha_secret_file`,
+`smtp_password_file`, `stripe_secret_key_file`,
 `stripe_webhook_secret_file`) must be mode `0400` or `0600`; values are
 never logged (the slog handler also redacts sensitive keys).
+
+## Accounts + billing (R5-3)
+
+- `POST /v1/auth/signup` creates the user (Argon2id), org, owner
+  membership, 30-day/25-machine trial subscription + licence and queues a
+  verification email. ALTCHA bot protection is on when
+  `altcha_secret_file` is set (dev leaves it unset — documented bypass).
+- Sessions are httpOnly signed cookies (no session table); the signature
+  is bound to the credential fingerprint so password/TOTP changes
+  invalidate cookies. TOTP is optional for members, **required for
+  owners**: new owners enrol before their first full session.
+- `POST /stripe/webhook` verifies the signature, stores the event
+  (idempotent on `event_id`) and enqueues a `billing.stripe_event` job;
+  worker handlers drive the subscription state machine off event
+  payloads. A `billing.suspend_sweep` job self-reschedules and suspends
+  subscriptions past due beyond `past_due_grace` (schema's `unpaid`
+  status — there is no `suspended` value) with an audit row + email.
+- `/v1/billing/checkout|portal|invoices` need owner/admin org role; the
+  Stripe client is bounded behind an interface (tests stub it).
+- Dev mail goes to Mailpit (compose, UI on :8025); production points
+  `smtp_*` at a relay and enqueues `mail.send` jobs.
 
 ## Development
 

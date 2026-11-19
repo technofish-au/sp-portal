@@ -73,10 +73,60 @@ type Config struct {
 	WorkerBatchSize    int           `koanf:"worker_batch_size"`
 	WorkerStaleTimeout time.Duration `koanf:"worker_stale_timeout"`
 
+	// PublicBaseURL is the externally reachable base of the service
+	// (https://portal.example.com); used in email links and Stripe
+	// redirect URLs.
+	PublicBaseURL string `koanf:"public_base_url"`
+
+	// Auth: auth_secret_file is a file-mounted secret (0400/0600) keying
+	// session-cookie HMACs, email-verification tokens and TOTP secret
+	// sealing. Empty generates an ephemeral key at startup — fine for dev
+	// (sessions reset on restart) but production must set it.
+	AuthSecretFile string        `koanf:"auth_secret_file"`
+	SessionTTL     time.Duration `koanf:"session_ttl"`
+	// SecureCookies sets the Secure attribute on session cookies; enable
+	// when the portal is served over TLS.
+	SecureCookies bool `koanf:"secure_cookies"`
+
+	// Sign-up bot protection: ALTCHA (self-hosted proof-of-work, no
+	// outbound calls). altcha_secret_file is the file-mounted HMAC key;
+	// empty disables the widget entirely (dev bypass). altcha_max_number
+	// bounds the proof-of-work difficulty.
+	AltchaSecretFile string `koanf:"altcha_secret_file"`
+	AltchaMaxNumber  int    `koanf:"altcha_max_number"`
+
+	// Trial: sign-up creates a trial subscription valid trial_days days
+	// and capped at trial_max_machines machines.
+	TrialDays        int `koanf:"trial_days"`
+	TrialMaxMachines int `koanf:"trial_max_machines"`
+
+	// Billing: a subscription stuck in past_due for longer than
+	// past_due_grace is suspended (moved to unpaid) by the sweep that runs
+	// every suspend_sweep_interval.
+	PastDueGrace         time.Duration `koanf:"past_due_grace"`
+	SuspendSweepInterval time.Duration `koanf:"suspend_sweep_interval"`
+
+	// Outbound mail. smtp_host empty disables SMTP and logs messages
+	// instead (dev default); point it at Mailpit in dev compose.
+	SMTPHost         string `koanf:"smtp_host"`
+	SMTPPort         int    `koanf:"smtp_port"`
+	SMTPUser         string `koanf:"smtp_user"`
+	SMTPPasswordFile string `koanf:"smtp_password_file"`
+	SMTPStartTLS     bool   `koanf:"smtp_starttls"`
+	MailFrom         string `koanf:"mail_from"`
+	MailFromName     string `koanf:"mail_from_name"`
+
 	// Stripe credentials are file-mounted secrets (same 0400/0600 rule as
 	// db_password_file); empty disables Stripe integration.
 	StripeSecretKeyFile     string `koanf:"stripe_secret_key_file"`
 	StripeWebhookSecretFile string `koanf:"stripe_webhook_secret_file"`
+	// Plan -> Stripe price id (price_...) for Checkout Sessions.
+	StripePriceStarter    string `koanf:"stripe_price_starter"`
+	StripePricePro        string `koanf:"stripe_price_pro"`
+	StripePriceEnterprise string `koanf:"stripe_price_enterprise"`
+	// StripeAutomaticTax turns on automatic_tax on Checkout Sessions and
+	// invoices (requires Stripe Tax registration).
+	StripeAutomaticTax bool `koanf:"stripe_automatic_tax"`
 }
 
 // defaults lists every key with its default value. It doubles as the list of
@@ -99,8 +149,29 @@ func defaults() map[string]any {
 		"worker_interval":            "1s",
 		"worker_batch_size":          32,
 		"worker_stale_timeout":       "5m",
+		"public_base_url":            "http://localhost:8080",
+		"auth_secret_file":           "",
+		"session_ttl":                "336h",
+		"secure_cookies":             false,
+		"altcha_secret_file":         "",
+		"altcha_max_number":          50000,
+		"trial_days":                 30,
+		"trial_max_machines":         25,
+		"past_due_grace":             "336h",
+		"suspend_sweep_interval":     "1h",
+		"smtp_host":                  "",
+		"smtp_port":                  25,
+		"smtp_user":                  "",
+		"smtp_password_file":         "",
+		"smtp_starttls":              false,
+		"mail_from":                  "portal@serverperch.com",
+		"mail_from_name":             "ServerPerch Portal",
 		"stripe_secret_key_file":     "",
 		"stripe_webhook_secret_file": "",
+		"stripe_price_starter":       "",
+		"stripe_price_pro":           "",
+		"stripe_price_enterprise":    "",
+		"stripe_automatic_tax":       false,
 	}
 }
 
@@ -239,6 +310,30 @@ func (c Config) Validate() error {
 	}
 	if c.WorkerStaleTimeout <= 0 {
 		add("worker_stale_timeout must be positive")
+	}
+	if strings.TrimSpace(c.PublicBaseURL) == "" {
+		add("public_base_url must not be empty")
+	}
+	if c.SessionTTL <= 0 {
+		add("session_ttl must be positive")
+	}
+	if c.AltchaMaxNumber < 1 {
+		add("altcha_max_number must be >= 1")
+	}
+	if c.TrialDays < 1 {
+		add("trial_days must be >= 1")
+	}
+	if c.TrialMaxMachines < 1 {
+		add("trial_max_machines must be >= 1")
+	}
+	if c.PastDueGrace <= 0 {
+		add("past_due_grace must be positive")
+	}
+	if c.SuspendSweepInterval <= 0 {
+		add("suspend_sweep_interval must be positive")
+	}
+	if c.SMTPPort < 1 || c.SMTPPort > 65535 {
+		add("smtp_port must be between 1 and 65535")
 	}
 	if len(errs) > 0 {
 		return fmt.Errorf("config: %s", strings.Join(errs, "; "))

@@ -83,6 +83,26 @@ func (q *Queries) GetOrganisationBySlug(ctx context.Context, slug string) (Organ
 	return i, err
 }
 
+const getOrganisationByStripeCustomer = `-- name: GetOrganisationByStripeCustomer :one
+SELECT id, name, slug, billing_email, stripe_customer_id, created_at, updated_at
+  FROM organisations WHERE stripe_customer_id = ?
+`
+
+func (q *Queries) GetOrganisationByStripeCustomer(ctx context.Context, stripeCustomerID sql.NullString) (Organisation, error) {
+	row := q.db.QueryRowContext(ctx, getOrganisationByStripeCustomer, stripeCustomerID)
+	var i Organisation
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.BillingEmail,
+		&i.StripeCustomerID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listOrganisations = `-- name: ListOrganisations :many
 SELECT id, name, slug, billing_email, stripe_customer_id, created_at, updated_at
   FROM organisations ORDER BY name, id LIMIT ? OFFSET ?
@@ -135,5 +155,20 @@ type SetOrganisationStripeCustomerParams struct {
 
 func (q *Queries) SetOrganisationStripeCustomer(ctx context.Context, arg SetOrganisationStripeCustomerParams) error {
 	_, err := q.db.ExecContext(ctx, setOrganisationStripeCustomer, arg.StripeCustomerID, arg.ID)
+	return err
+}
+
+const updateOrganisationBilling = `-- name: UpdateOrganisationBilling :exec
+UPDATE organisations SET name = ?, billing_email = ? WHERE id = ?
+`
+
+type UpdateOrganisationBillingParams struct {
+	Name         string
+	BillingEmail string
+	ID           string
+}
+
+func (q *Queries) UpdateOrganisationBilling(ctx context.Context, arg UpdateOrganisationBillingParams) error {
+	_, err := q.db.ExecContext(ctx, updateOrganisationBilling, arg.Name, arg.BillingEmail, arg.ID)
 	return err
 }

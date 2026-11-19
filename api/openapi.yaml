@@ -16,7 +16,11 @@ servers:
 tags:
   - name: meta
     description: Service metadata (unauthenticated)
+  - name: auth
+    description: Accounts + sessions (R5-3)
   - name: organisations
+  - name: billing
+    description: Stripe billing (R5-3)
   - name: licences
   - name: instances
   - name: releases
@@ -52,24 +56,187 @@ paths:
                   status: { type: string, enum: [unavailable] }
                   detail: { type: string }
 
-  # --- Later waves: the versioned surface (no handlers yet) -------------
+  # --- R5-3: accounts + billing -----------------------------------------
+
+  /stripe/webhook:
+    post:
+      tags: [billing]
+      summary: Stripe webhook inbox
+      description: |
+        Stripe-Signature verified, the raw event is stored in
+        stripe_events (unique event_id — redeliveries are idempotent) and
+        a billing.stripe_event job is enqueued for the worker. Always
+        answers quickly; processing is asynchronous.
+      parameters:
+        - name: Stripe-Signature
+          in: header
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Event stored (or idempotent duplicate) }
+        "400": { description: Bad signature or payload }
+        "503": { description: Webhook secret not configured }
+
+  /v1/auth/altcha:
+    get:
+      tags: [auth]
+      summary: Issue an ALTCHA proof-of-work challenge
+      responses:
+        "200": { description: Challenge JSON }
+        "404": { description: Captcha not configured (dev bypass) }
+  /v1/auth/signup:
+    post:
+      tags: [auth]
+      summary: Create account + org + 30-day/25-machine trial
+      description: |
+        Creates the user (Argon2id), organisation, owner membership, trial
+        subscription and trial licence; queues a verification email.
+        Session stage is "setup" — new owners must enrol TOTP before
+        reaching a full session.
+      responses:
+        "201": { description: Created; session cookie set }
+        "400": { description: Validation error }
+        "403": { description: Captcha failed }
+        "409": { description: Email already registered }
+  /v1/auth/login:
+    post:
+      tags: [auth]
+      summary: Password login
+      description: |
+        Returns status ok | totp_required | totp_setup_required and sets
+        the session cookie at the matching stage (pending stages only
+        reach the TOTP endpoints).
+      responses:
+        "200": { description: Login status + user }
+        "401": { description: Bad credentials }
+  /v1/auth/login/totp:
+    post:
+      tags: [auth]
+      summary: Finish a totp_required login
+      responses:
+        "200": { description: Full session issued }
+        "401": { description: Bad code or no pending session }
+  /v1/auth/logout:
+    post:
+      tags: [auth]
+      summary: Clear the session cookie
+      responses:
+        "204": { description: Logged out }
+  /v1/auth/verify-email:
+    get:
+      tags: [auth]
+      summary: Consume an email-verification token (idempotent)
+      parameters:
+        - { name: token, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Verified }
+        "400": { description: Invalid or expired token }
+  /v1/auth/me:
+    get:
+      tags: [auth]
+      summary: Current session user + org memberships
+      responses:
+        "200": { description: user, email_verified, organisations }
+        "401": { description: Not authenticated }
+  /v1/auth/resend-verification:
+    post:
+      tags: [auth]
+      summary: Queue a fresh verification email
+      responses:
+        "204": { description: Queued }
+        "401": { description: Not authenticated }
+  /v1/auth/totp/setup:
+    post:
+      tags: [auth]
+      summary: Begin TOTP enrolment (any session stage)
+      responses:
+        "200": { description: provisioning_uri + secret }
+        "401": { description: Not authenticated }
+  /v1/auth/totp/enable:
+    post:
+      tags: [auth]
+      summary: Verify a code and enable TOTP (upgrades pending sessions)
+      responses:
+        "200": { description: Enabled; full session issued }
+        "401": { description: Bad code }
+        "409": { description: No pending enrolment }
+  /v1/auth/totp/disable:
+    post:
+      tags: [auth]
+      summary: Disable TOTP (full sessions; owners may not)
+      responses:
+        "204": { description: Disabled }
+        "409": { description: Owner must keep TOTP }
 
   /v1/organisations:
     get:
       tags: [organisations]
-      summary: List organisations (placeholder)
-      description: Stub — implemented in a later wave.
+      summary: List my organisations
       responses:
-        "501": { description: Not implemented }
+        "200": { description: org + role list }
+        "401": { description: Not authenticated }
   /v1/organisations/{orgId}:
     get:
       tags: [organisations]
-      summary: Get an organisation (placeholder)
-      description: Stub — implemented in a later wave.
+      summary: Org detail + latest subscription
       parameters:
         - $ref: "#/components/parameters/orgId"
       responses:
-        "501": { description: Not implemented }
+        "200": { description: org, role, subscription }
+        "403": { description: Not a member }
+  /v1/organisations/{orgId}/members:
+    get:
+      tags: [organisations]
+      summary: List org members
+      parameters:
+        - $ref: "#/components/parameters/orgId"
+      responses:
+        "200": { description: member list }
+        "403": { description: Not a member }
+
+  /v1/billing/subscription:
+    get:
+      tags: [billing]
+      summary: Latest subscription for an org (any member)
+      parameters:
+        - { name: org_id, in: query, required: true, schema: { type: string } }
+      responses:
+        "200": { description: subscription }
+        "404": { description: No subscription }
+  /v1/billing/checkout:
+    post:
+      tags: [billing]
+      summary: Create a Stripe Checkout Session (owner/admin)
+      description: |
+        Ensures the Stripe customer exists (created + linked on first
+        use), then returns the hosted checkout URL. automatic_tax and
+        tax_id_collection (ABN capture) are enabled as configured.
+      responses:
+        "200": { description: url + session_id }
+        "400": { description: Unknown plan }
+        "503": { description: Stripe not configured }
+  /v1/billing/portal:
+    post:
+      tags: [billing]
+      summary: Create a Stripe Customer Portal session (owner/admin)
+      responses:
+        "200": { description: url }
+        "409": { description: No billing account yet }
+        "503": { description: Stripe not configured }
+  /v1/billing/invoices:
+    post:
+      tags: [billing]
+      summary: Enterprise send-invoice purchase (owner/admin)
+      description: |
+        Creates a send_invoice Stripe subscription (no Checkout), records
+        the ABN as an au_abn tax id when supplied and emails the hosted
+        invoice URL to the org billing address.
+      responses:
+        "200": { description: subscription_id, invoice_id, hosted_invoice_url }
+        "400": { description: Unknown plan }
+        "503": { description: Stripe not configured }
+
+  # --- Later waves: the versioned surface (no handlers yet) -------------
   /v1/licences:
     get:
       tags: [licences]

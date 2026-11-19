@@ -47,6 +47,17 @@ func (q *Queries) CountJobsByStatus(ctx context.Context) ([]CountJobsByStatusRow
 	return items, nil
 }
 
+const countRunnableJobsByKind = `-- name: CountRunnableJobsByKind :one
+SELECT COUNT(*) FROM jobs WHERE kind = ? AND status IN ('pending', 'running')
+`
+
+func (q *Queries) CountRunnableJobsByKind(ctx context.Context, kind string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countRunnableJobsByKind, kind)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getJob = `-- name: GetJob :one
 SELECT id, kind, payload, dedupe_key, status, attempts, max_attempts,
        run_at, claimed_by, claimed_at, last_error, created_at, updated_at,
