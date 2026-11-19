@@ -1,8 +1,8 @@
 // Database side of the licensing domain: licence validity, seat counting,
-// instance registration and the audit_log records that stand in for
-// columns the frozen schema lacks (issued document hashes live on
-// licence.document_issued events; key bindings and clone flags live in
-// internal/instauth's store on the same table).
+// instance registration and document issuance. Issued document hashes
+// live on licences.doc_hash; key bindings and clone flags live on the
+// instance row via internal/instauth's store. licence.document_issued
+// audit events keep the per-issuance trail (instance, signing kid).
 package licensing
 
 import (
@@ -24,9 +24,10 @@ import (
 	"github.com/technofish-au/sp-portal/internal/instauth"
 )
 
-// ActionDocIssued is the audit_log action recording an issued licence
-// document hash (there is no licences.doc_hash column; the event trail
-// carries it). Detail: {"doc_hash","instance_id","kid"}.
+// ActionDocIssued is the audit_log action recording each issued licence
+// document (the per-issuance trail: doc hash, instance, signing kid).
+// licences.doc_hash holds the latest issued hash for verification.
+// Detail: {"doc_hash","instance_id","kid"}.
 const ActionDocIssued = "licence.document_issued"
 
 // aptTokenKind is the download_tokens kind for apt repository credentials.
@@ -52,8 +53,9 @@ func licenceProblem(lic dbq.Licence, now time.Time) string {
 	}
 }
 
-// issueDocument signs a licence document binding lic to inst and records
-// its hash on a licence.document_issued audit event.
+// issueDocument signs a licence document binding lic to inst, stores its
+// hash on licences.doc_hash and records a licence.document_issued audit
+// event for the issuance trail.
 func issueDocument(ctx context.Context, q *dbq.Queries, issuer *Issuer, lic dbq.Licence, inst dbq.Instance) (json.RawMessage, error) {
 	doc, hash, err := issuer.Sign(Payload{
 		Version:      1,
@@ -70,6 +72,16 @@ func issueDocument(ctx context.Context, q *dbq.Queries, issuer *Issuer, lic dbq.
 	})
 	if err != nil {
 		return nil, err
+	}
+	sum, err := hex.DecodeString(hash)
+	if err != nil {
+		return nil, fmt.Errorf("licensing: doc hash: %w", err)
+	}
+	if err := q.SetLicenceDocHash(ctx, dbq.SetLicenceDocHashParams{
+		DocHash: sql.NullString{String: string(sum), Valid: true},
+		ID:      lic.ID,
+	}); err != nil {
+		return nil, fmt.Errorf("licensing: store doc hash: %w", err)
 	}
 	detail, err := json.Marshal(map[string]string{
 		"doc_hash":    hash,

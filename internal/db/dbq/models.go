@@ -47,6 +47,8 @@ type Instance struct {
 	LastSeenAt       *time.Time
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
+	PublicKey        sql.NullString
+	SuspectedCloneAt *time.Time
 }
 
 type InstanceReport struct {
@@ -87,6 +89,7 @@ type Licence struct {
 	RevokedAt      *time.Time
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	DocHash        sql.NullString
 }
 
 type Membership struct {
@@ -105,6 +108,7 @@ type Organisation struct {
 	StripeCustomerID sql.NullString
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
+	TaxID            string
 }
 
 type Release struct {
@@ -181,4 +185,5 @@ type User struct {
 	DisabledAt      *time.Time
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+	EmailVerifiedAt *time.Time
 }

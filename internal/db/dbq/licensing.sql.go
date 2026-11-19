@@ -12,6 +12,23 @@ import (
 	"time"
 )
 
+const bindInstancePublicKey = `-- name: BindInstancePublicKey :exec
+UPDATE instances SET public_key = ? WHERE id = ? AND public_key IS NULL
+`
+
+type BindInstancePublicKeyParams struct {
+	PublicKey sql.NullString
+	ID        string
+}
+
+// Binds the request-signing key once; the NULL guard makes it a no-op if
+// a key was already bound (re-binding is not a thing — a clashing key is
+// a clone flag instead).
+func (q *Queries) BindInstancePublicKey(ctx context.Context, arg BindInstancePublicKeyParams) error {
+	_, err := q.db.ExecContext(ctx, bindInstancePublicKey, arg.PublicKey, arg.ID)
+	return err
+}
+
 const countLicenceInstances = `-- name: CountLicenceInstances :one
 SELECT COUNT(*) FROM instances
  WHERE licence_id = ? AND status <> 'decommissioned'
@@ -52,9 +69,21 @@ func (q *Queries) CreateInstance(ctx context.Context, arg CreateInstanceParams) 
 	return err
 }
 
+const flagInstanceClone = `-- name: FlagInstanceClone :exec
+UPDATE instances SET suspected_clone_at = CURRENT_TIMESTAMP(6)
+ WHERE id = ? AND suspected_clone_at IS NULL
+`
+
+// Sets suspected_clone_at once; NULL guard keeps it idempotent.
+func (q *Queries) FlagInstanceClone(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, flagInstanceClone, id)
+	return err
+}
+
 const getInstance = `-- name: GetInstance :one
-SELECT id, org_id, licence_id, name, fingerprint, appliance_version, status,
-       last_seen_at, created_at, updated_at
+SELECT id, org_id, licence_id, name, fingerprint,
+       appliance_version, status, last_seen_at,
+       created_at, updated_at, public_key, suspected_clone_at
   FROM instances WHERE id = ?
 `
 
@@ -72,13 +101,16 @@ func (q *Queries) GetInstance(ctx context.Context, id string) (Instance, error) 
 		&i.LastSeenAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PublicKey,
+		&i.SuspectedCloneAt,
 	)
 	return i, err
 }
 
 const getInstanceByFingerprint = `-- name: GetInstanceByFingerprint :one
-SELECT id, org_id, licence_id, name, fingerprint, appliance_version, status,
-       last_seen_at, created_at, updated_at
+SELECT id, org_id, licence_id, name, fingerprint,
+       appliance_version, status, last_seen_at,
+       created_at, updated_at, public_key, suspected_clone_at
   FROM instances WHERE org_id = ? AND fingerprint = ?
 `
 
@@ -104,13 +136,16 @@ func (q *Queries) GetInstanceByFingerprint(ctx context.Context, arg GetInstanceB
 		&i.LastSeenAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.PublicKey,
+		&i.SuspectedCloneAt,
 	)
 	return i, err
 }
 
 const getLicence = `-- name: GetLicence :one
-SELECT id, org_id, subscription_id, licence_key, kind, plan, max_instances,
-       issued_at, expires_at, revoked_at, created_at, updated_at
+SELECT id, org_id, subscription_id, licence_key, kind, plan,
+       max_instances, issued_at, expires_at, revoked_at, created_at, updated_at,
+       doc_hash
   FROM licences WHERE id = ?
 `
 
@@ -130,21 +165,24 @@ func (q *Queries) GetLicence(ctx context.Context, id string) (Licence, error) {
 		&i.RevokedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DocHash,
 	)
 	return i, err
 }
 
 const getLicenceByKey = `-- name: GetLicenceByKey :one
 
-SELECT id, org_id, subscription_id, licence_key, kind, plan, max_instances,
-       issued_at, expires_at, revoked_at, created_at, updated_at
+SELECT id, org_id, subscription_id, licence_key, kind, plan,
+       max_instances, issued_at, expires_at, revoked_at, created_at, updated_at,
+       doc_hash
   FROM licences WHERE licence_key = ?
 `
 
 // Licence-domain queries (R5-2): licence lookup, instance registration,
-// check-in reports and the audit_log events that stand in for dedicated
-// columns (key bindings, clone flags, issued document hashes) while the
-// schema is frozen.
+// check-in reports and the real auth-state columns added by migration
+// 00006 (public_key, suspected_clone_at, doc_hash). audit_log events are
+// still written for the forensic trail (which keys clashed, which kid
+// signed an issuance) but are no longer the state of record.
 func (q *Queries) GetLicenceByKey(ctx context.Context, licenceKey string) (Licence, error) {
 	row := q.db.QueryRowContext(ctx, getLicenceByKey, licenceKey)
 	var i Licence
@@ -161,28 +199,9 @@ func (q *Queries) GetLicenceByKey(ctx context.Context, licenceKey string) (Licen
 		&i.RevokedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DocHash,
 	)
 	return i, err
-}
-
-const hasAuditEvent = `-- name: HasAuditEvent :one
-SELECT EXISTS(
-    SELECT 1 FROM audit_log
-     WHERE action = ? AND target_type = ? AND target_id = ?
-)
-`
-
-type HasAuditEventParams struct {
-	Action     string
-	TargetType string
-	TargetID   string
-}
-
-func (q *Queries) HasAuditEvent(ctx context.Context, arg HasAuditEventParams) (bool, error) {
-	row := q.db.QueryRowContext(ctx, hasAuditEvent, arg.Action, arg.TargetType, arg.TargetID)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
 }
 
 const insertAuditEvent = `-- name: InsertAuditEvent :exec
@@ -260,27 +279,6 @@ func (q *Queries) InsertInstanceReport(ctx context.Context, arg InsertInstanceRe
 	return err
 }
 
-const latestAuditDetail = `-- name: LatestAuditDetail :one
-SELECT detail FROM audit_log
- WHERE action = ? AND target_type = ? AND target_id = ?
- ORDER BY created_at DESC, id DESC LIMIT 1
-`
-
-type LatestAuditDetailParams struct {
-	Action     string
-	TargetType string
-	TargetID   string
-}
-
-// Most recent audit event detail for a (target_type, target_id, action)
-// triple; used for instance key bindings (action 'instance.key_bound').
-func (q *Queries) LatestAuditDetail(ctx context.Context, arg LatestAuditDetailParams) (json.RawMessage, error) {
-	row := q.db.QueryRowContext(ctx, latestAuditDetail, arg.Action, arg.TargetType, arg.TargetID)
-	var detail json.RawMessage
-	err := row.Scan(&detail)
-	return detail, err
-}
-
 const latestPublishedRelease = `-- name: LatestPublishedRelease :one
 SELECT id, version, component, channel, notes, artifact_path, sha256,
        size_bytes, published_at, created_at, updated_at
@@ -311,6 +309,21 @@ func (q *Queries) LatestPublishedRelease(ctx context.Context, arg LatestPublishe
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const setLicenceDocHash = `-- name: SetLicenceDocHash :exec
+UPDATE licences SET doc_hash = ? WHERE id = ?
+`
+
+type SetLicenceDocHashParams struct {
+	DocHash sql.NullString
+	ID      string
+}
+
+// Hash of the most recently issued signed licence document.
+func (q *Queries) SetLicenceDocHash(ctx context.Context, arg SetLicenceDocHashParams) error {
+	_, err := q.db.ExecContext(ctx, setLicenceDocHash, arg.DocHash, arg.ID)
+	return err
 }
 
 const touchInstance = `-- name: TouchInstance :exec

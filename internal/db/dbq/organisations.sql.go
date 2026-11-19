@@ -8,6 +8,7 @@ package dbq
 import (
 	"context"
 	"database/sql"
+	"time"
 )
 
 const countOrganisations = `-- name: CountOrganisations :one
@@ -48,9 +49,19 @@ SELECT id, name, slug, billing_email, stripe_customer_id, created_at, updated_at
   FROM organisations WHERE id = ?
 `
 
-func (q *Queries) GetOrganisation(ctx context.Context, id string) (Organisation, error) {
+type GetOrganisationRow struct {
+	ID               string
+	Name             string
+	Slug             string
+	BillingEmail     string
+	StripeCustomerID sql.NullString
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+func (q *Queries) GetOrganisation(ctx context.Context, id string) (GetOrganisationRow, error) {
 	row := q.db.QueryRowContext(ctx, getOrganisation, id)
-	var i Organisation
+	var i GetOrganisationRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
@@ -68,9 +79,19 @@ SELECT id, name, slug, billing_email, stripe_customer_id, created_at, updated_at
   FROM organisations WHERE slug = ?
 `
 
-func (q *Queries) GetOrganisationBySlug(ctx context.Context, slug string) (Organisation, error) {
+type GetOrganisationBySlugRow struct {
+	ID               string
+	Name             string
+	Slug             string
+	BillingEmail     string
+	StripeCustomerID sql.NullString
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+func (q *Queries) GetOrganisationBySlug(ctx context.Context, slug string) (GetOrganisationBySlugRow, error) {
 	row := q.db.QueryRowContext(ctx, getOrganisationBySlug, slug)
-	var i Organisation
+	var i GetOrganisationBySlugRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
@@ -93,15 +114,25 @@ type ListOrganisationsParams struct {
 	Offset int32
 }
 
-func (q *Queries) ListOrganisations(ctx context.Context, arg ListOrganisationsParams) ([]Organisation, error) {
+type ListOrganisationsRow struct {
+	ID               string
+	Name             string
+	Slug             string
+	BillingEmail     string
+	StripeCustomerID sql.NullString
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+func (q *Queries) ListOrganisations(ctx context.Context, arg ListOrganisationsParams) ([]ListOrganisationsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listOrganisations, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Organisation{}
+	items := []ListOrganisationsRow{}
 	for rows.Next() {
-		var i Organisation
+		var i ListOrganisationsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,

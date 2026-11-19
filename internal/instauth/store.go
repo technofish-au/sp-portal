@@ -15,15 +15,14 @@ import (
 	"github.com/technofish-au/sp-portal/internal/db/dbq"
 )
 
-// Auth state has no dedicated columns in the frozen R5-1 schema (no
-// instances.public_key, no clone flag), so bindings ride on the
-// append-only audit_log — the one JSON-detail event table. Actions:
+// Auth state lives on the instance row itself (migration 00006):
+// instances.public_key is the bound request-signing key and
+// instances.suspected_clone_at is the clone flag. Audit events are still
+// written for the forensic trail (which keys clashed) but the columns
+// are the state of record. Actions:
 //
 //	instance.key_bound        detail {"public_key": "<base64>"}
 //	instance.suspected_clone  detail {"bound_key_id","presented_key_id"}
-//
-// target_type is always "instance", target_id the instances.id. The most
-// recent key_bound event is the active binding.
 const (
 	ActionKeyBound       = "instance.key_bound"
 	ActionSuspectedClone = "instance.suspected_clone"
@@ -37,7 +36,7 @@ type Store struct {
 	q *dbq.Queries
 }
 
-// NewStore returns the audit_log-backed instance-auth store.
+// NewStore returns the instance-auth store.
 func NewStore(db *sql.DB) *Store { return &Store{q: dbq.New(db)} }
 
 // KeyID is the short, log-safe identifier of a public key (first 16 bytes
@@ -48,40 +47,39 @@ func KeyID(pub ed25519.PublicKey) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:16])
 }
 
-type keyBoundDetail struct {
-	PublicKey string `json:"public_key"`
-}
-
-// BoundKey returns the public key currently bound to the instance
-// (the latest key_bound audit event). found is false when no key has ever
-// been bound — activation is what binds keys.
+// BoundKey returns the public key bound to the instance
+// (instances.public_key). found is false when no key has ever been
+// bound — activation is what binds keys.
 func (s *Store) BoundKey(ctx context.Context, instanceID string) (pub ed25519.PublicKey, found bool, err error) {
-	raw, err := s.q.LatestAuditDetail(ctx, dbq.LatestAuditDetailParams{
-		Action:     ActionKeyBound,
-		TargetType: TargetTypeInstance,
-		TargetID:   instanceID,
-	})
+	inst, err := s.q.GetInstance(ctx, instanceID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, false, nil
 		}
 		return nil, false, fmt.Errorf("instauth: bound key: %w", err)
 	}
-	var d keyBoundDetail
-	if err := json.Unmarshal(raw, &d); err != nil {
-		return nil, false, fmt.Errorf("instauth: bound key detail: %w", err)
+	if !inst.PublicKey.Valid {
+		return nil, false, nil
 	}
-	key, err := base64.StdEncoding.DecodeString(d.PublicKey)
-	if err != nil || len(key) != ed25519.PublicKeySize {
-		return nil, false, fmt.Errorf("instauth: bound key detail malformed")
+	key := []byte(inst.PublicKey.String)
+	if len(key) != ed25519.PublicKeySize {
+		return nil, false, fmt.Errorf("instauth: bound key malformed")
 	}
 	return ed25519.PublicKey(key), true, nil
 }
 
 // BindKey records public key pub as the instance's request-signing key.
+// The column write is guarded by public_key IS NULL so an existing
+// binding is never overwritten; the audit row keeps the event trail.
 func (s *Store) BindKey(ctx context.Context, orgID, instanceID string, pub ed25519.PublicKey) error {
-	detail, err := json.Marshal(keyBoundDetail{
-		PublicKey: base64.StdEncoding.EncodeToString(pub),
+	if err := s.q.BindInstancePublicKey(ctx, dbq.BindInstancePublicKeyParams{
+		PublicKey: sql.NullString{String: string(pub), Valid: true},
+		ID:        instanceID,
+	}); err != nil {
+		return fmt.Errorf("instauth: bind key: %w", err)
+	}
+	detail, err := json.Marshal(map[string]string{
+		"public_key": base64.StdEncoding.EncodeToString(pub),
 	})
 	if err != nil {
 		return err
@@ -104,6 +102,9 @@ func (s *Store) FlagClone(ctx context.Context, orgID, instanceID string, bound, 
 	if err != nil || flagged {
 		return err
 	}
+	if err := s.q.FlagInstanceClone(ctx, instanceID); err != nil {
+		return fmt.Errorf("instauth: flag clone: %w", err)
+	}
 	detail, err := json.Marshal(map[string]string{
 		"bound_key_id":     KeyID(bound),
 		"presented_key_id": KeyID(presented),
@@ -124,9 +125,12 @@ func (s *Store) FlagClone(ctx context.Context, orgID, instanceID string, bound, 
 // CloneFlagged reports whether the instance carries the suspected_clone
 // flag — surfaced as the check-in status rather than a block.
 func (s *Store) CloneFlagged(ctx context.Context, instanceID string) (bool, error) {
-	return s.q.HasAuditEvent(ctx, dbq.HasAuditEventParams{
-		Action:     ActionSuspectedClone,
-		TargetType: TargetTypeInstance,
-		TargetID:   instanceID,
-	})
+	inst, err := s.q.GetInstance(ctx, instanceID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return inst.SuspectedCloneAt != nil, nil
 }

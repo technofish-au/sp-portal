@@ -7,6 +7,8 @@ package dbq
 
 import (
 	"context"
+	"database/sql"
+	"time"
 )
 
 const createUser = `-- name: CreateUser :exec
@@ -39,9 +41,22 @@ SELECT id, email, display_name, password_hash, is_platform_admin,
   FROM users WHERE id = ?
 `
 
-func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
+type GetUserRow struct {
+	ID              string
+	Email           string
+	DisplayName     string
+	PasswordHash    string
+	IsPlatformAdmin bool
+	TotpSecretEnc   sql.NullString
+	TotpEnabled     bool
+	DisabledAt      *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+func (q *Queries) GetUser(ctx context.Context, id string) (GetUserRow, error) {
 	row := q.db.QueryRowContext(ctx, getUser, id)
-	var i User
+	var i GetUserRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
@@ -63,9 +78,22 @@ SELECT id, email, display_name, password_hash, is_platform_admin,
   FROM users WHERE email = ?
 `
 
-func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
+type GetUserByEmailRow struct {
+	ID              string
+	Email           string
+	DisplayName     string
+	PasswordHash    string
+	IsPlatformAdmin bool
+	TotpSecretEnc   sql.NullString
+	TotpEnabled     bool
+	DisabledAt      *time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
 	row := q.db.QueryRowContext(ctx, getUserByEmail, email)
-	var i User
+	var i GetUserByEmailRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
