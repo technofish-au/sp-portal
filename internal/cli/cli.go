@@ -28,6 +28,9 @@ Commands:
   worker         Run the background job worker (same DB requirements)
   migrate [up|status]
                  Apply database migrations (default: up) or show their status
+  admin create --email EMAIL [--display-name NAME]
+                 Create a staff (is_platform_admin) user; prints the generated
+                 password once
   healthcheck    GET http://127.0.0.1:<port>/healthz; exit 0 if healthy, 1 otherwise
   version        Print version information
   help           Show this help
@@ -58,6 +61,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return runWorker(ctx, stderr)
 	case "migrate":
 		return runMigrate(ctx, rest, stdout, stderr)
+	case "admin":
+		return runAdmin(ctx, rest, stdout, stderr)
 	case "healthcheck":
 		return runHealthcheck(ctx, stderr)
 	default:

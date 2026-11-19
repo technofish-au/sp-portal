@@ -8,7 +8,7 @@ web UI.
 ## Layout
 
 - `cmd/sp-portal` — single binary: `serve`, `worker`, `migrate`,
-  `healthcheck`, `version`
+  `admin create`, `healthcheck`, `version`
 - `internal/<domain>` — one package per domain; each exposes `routes.go`
   mounted with a single `r.Mount` line in `internal/httpapi/router.go`
   (waves add domains here)
@@ -30,6 +30,18 @@ curl localhost:8880/healthz
 ```
 
 `make dev-down` stops the stack; `make migrate` re-runs migrations.
+
+Staff access (`/v1/admin/*` needs `users.is_platform_admin` + a full
+session) is bootstrapped with the CLI — there is no self-serve staff
+sign-up:
+
+```sh
+docker compose -f deploy/compose/docker-compose.yml run --rm app \
+  admin create --email staff@demo.local
+```
+
+The generated password prints once; the staff user has no org membership
+so login goes straight to a full session.
 
 ## Configuration
 
