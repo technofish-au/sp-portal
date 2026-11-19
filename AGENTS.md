@@ -18,7 +18,7 @@ too).
   exists).
 - `cd web && npx tsc --noEmit` green; regenerate `src/routeTree.gen.ts`
   via `npm run build` after editing `src/routes/`.
-- Compose smoke: `make dev-up` → `curl localhost:8080/healthz` → `make dev-down`.
+- Compose smoke: `make dev-up` → `curl localhost:8880/healthz` → `make dev-down`.
 
 ## Conventions (mirroring sp-platform)
 

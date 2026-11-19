@@ -3,7 +3,7 @@
 # for host tooling. The schema is applied by `make dev-up` / `make migrate`.
 #
 #   make dev-up     # mariadb -> migrate -> app + worker
-#   curl localhost:8080/healthz
+#   curl localhost:8880/healthz
 name: sp-portal
 
 services:
@@ -39,13 +39,13 @@ services:
       dockerfile: deploy/docker/Dockerfile
     command: serve
     environment:
-      PORTAL_HTTP_ADDR: ":8080"
+      PORTAL_HTTP_ADDR: ":8880"
       PORTAL_DB_SOCKET: /run/mysqld/mysqld.sock
       PORTAL_DB_NAME: portal
       PORTAL_DB_USER: portal
       PORTAL_DB_PASSWORD: sp-portal-dev
       PORTAL_STORAGE_DIR: /var/lib/sp-portal
-      PORTAL_PUBLIC_BASE_URL: "http://localhost:8080"
+      PORTAL_PUBLIC_BASE_URL: "http://localhost:8880"
       # Mailpit below catches outbound mail in dev (no auth/TLS on :1025).
       PORTAL_SMTP_HOST: mailpit
       PORTAL_SMTP_PORT: "1025"
@@ -58,7 +58,7 @@ services:
       - mysql-run:/run/mysqld
       - portal-data:/var/lib/sp-portal
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8880:8880"
     depends_on:
       mariadb:
         condition: service_healthy

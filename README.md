@@ -25,7 +25,7 @@ web UI.
 
 ```sh
 make dev-up          # mariadb -> migrate -> app + worker
-curl localhost:8080/healthz
+curl localhost:8880/healthz
 # {"status":"ok","version":"dev"}
 ```
 
