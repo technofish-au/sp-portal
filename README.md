@@ -17,7 +17,10 @@ web UI.
   output
 - `internal/jobs` — durable job queue (`jobs` table) + worker
 - `web` — React + Mantine + Vite + TypeScript UI (embedded into the binary)
-- `deploy/` — Dockerfile (Debian 13), dev compose, Podman quadlets
+- `deploy/` — Dockerfile (Debian 13), dev compose, Podman quadlets;
+  `deploy/virtualmin/` holds the production Virtualmin deployment
+  (Apache vhosts, pod Quadlets, secrets layout, deploy.sh, ops docs —
+  see its README)
 - `site/` — the static serverperch.com marketing site (Astro → `public_html`
   via `site/deploy.sh`; see `site/README.md`)
 - `api/openapi.yaml` — API skeleton (`/healthz` now, `/v1/*` documented

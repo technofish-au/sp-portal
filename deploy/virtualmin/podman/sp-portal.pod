@@ -1,0 +1,30 @@
+# Quadlet pod definition for the ServerPerch portal on the Virtualmin host.
+#
+# Install (as the `serverperch` domain user):
+#
+#   install -d -m 0700 ~/.config/containers/systemd
+#   cp sp-portal.pod sp-portal-app.container sp-portal-worker.container \
+#      sp-portal-migrate.container ~/.config/containers/systemd/
+#   systemctl --user daemon-reload
+#   systemctl --user start sp-portal-app sp-portal-worker
+#
+# One pod carries both containers so they share the network namespace and
+# the app can publish its HTTP port on the pod. Only 127.0.0.1:8080 is
+# published — Apache (portal./api./admin.serverperch.com vhosts) is the
+# only ingress; the container port must never be public.
+#
+# The pod is started by the containers' WantedBy=default.target install
+# target; enable linger once (see ../README.md):
+#
+#   sudo loginctl enable-linger serverperch
+#
+[Unit]
+Description=ServerPerch portal pod (app + worker)
+
+[Pod]
+PodName=sp-portal
+# Pod-internal port published on loopback only — Apache proxies to it.
+PublishPort=127.0.0.1:8080:8080
+
+[Install]
+WantedBy=default.target

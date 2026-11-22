@@ -1,0 +1,31 @@
+# Quadlet one-shot unit for `sp-portal migrate` — applies goose
+# migrations with the DDL-capable DB user. NOT started at boot (no
+# [Install]); deploy.sh runs migrations as a `podman run --rm` one-off
+# instead, which captures output inline. This unit is the alternative
+# pattern for operators who prefer systemd ordering:
+#
+#   systemctl --user start sp-portal-migrate   # blocks until done
+#   systemctl --user show sp-portal-migrate -p ExecMainStatus -p Result
+#
+# Run it BEFORE restarting sp-portal-app on every deploy; `serve` and
+# `worker` refuse to start on an unmigrated (or newer) schema.
+[Unit]
+Description=sp-portal schema migrate (one-shot, DDL user)
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+ContainerName=sp-portal-migrate
+User=0
+Image=ghcr.io/technofish-au/sp-portal:latest
+Exec=migrate
+Environment=PORTAL_DB_SOCKET=/run/mysqld/mysqld.sock
+Environment=PORTAL_DB_NAME=serverperch
+Environment=PORTAL_DB_USER=sp_portal_migrate
+Environment=PORTAL_DB_PASSWORD_FILE=/run/secrets/sp_portal_db_migrate_password
+Secret=sp_portal_db_migrate_password,type=mount,mode=0400
+Volume=/run/mysqld:/run/mysqld:ro
+
+[Service]
+Type=oneshot
+RemainAfterExit=no

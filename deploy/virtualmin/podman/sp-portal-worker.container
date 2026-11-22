@@ -1,0 +1,54 @@
+# Quadlet unit for sp-portal-worker — the background job worker
+# (`sp-portal worker`): Stripe event processing, mail, rollups, cleanup
+# of expired support bundles and download tokens. Member of the
+# sp-portal pod; mounts only the secrets it needs — the licence-signing
+# key stays in sp-portal-app only (09-release-roadmap.md R5 item 8).
+[Unit]
+Description=ServerPerch portal job worker
+After=network-online.target sp-portal-pod.service sp-portal-app.service
+Wants=network-online.target
+Requires=sp-portal-pod.service
+# Same reboot race as sp-portal-app — keep retrying until the DB
+# socket exists (see app unit).
+StartLimitIntervalSec=0
+
+[Container]
+Pod=sp-portal.pod
+ContainerName=sp-portal-worker
+# See sp-portal-app.container for why the container runs as uid 0
+# (rootless uid 0 == the `serverperch` host user).
+User=0
+Image=ghcr.io/technofish-au/sp-portal:latest
+Exec=worker
+
+Environment=PORTAL_DB_SOCKET=/run/mysqld/mysqld.sock
+Environment=PORTAL_DB_NAME=serverperch
+Environment=PORTAL_DB_USER=sp_portal_app
+Environment=PORTAL_DB_PASSWORD_FILE=/run/secrets/sp_portal_db_password
+Environment=PORTAL_STORAGE_DIR=/var/lib/sp-portal
+Environment=PORTAL_SMTP_HOST=smtp.serverperch.com
+Environment=PORTAL_SMTP_PORT=587
+Environment=PORTAL_SMTP_USER=portal@serverperch.com
+Environment=PORTAL_SMTP_PASSWORD_FILE=/run/secrets/sp_portal_smtp_password
+Environment=PORTAL_SMTP_STARTTLS=true
+Environment=PORTAL_MAIL_FROM=portal@serverperch.com
+Environment=PORTAL_MAIL_FROM_NAME="ServerPerch Portal"
+# Worker-side Stripe access (event jobs may fetch objects via the API).
+Environment=PORTAL_STRIPE_SECRET_KEY_FILE=/run/secrets/sp_portal_stripe_secret_key
+
+Secret=sp_portal_db_password,type=mount,mode=0400
+Secret=sp_portal_smtp_password,type=mount,mode=0400
+Secret=sp_portal_stripe_secret_key,type=mount,mode=0400
+
+Volume=/run/mysqld:/run/mysqld:ro
+Volume=/home/serverperch/storage:/var/lib/sp-portal
+
+# No HTTP server — the worker's liveness is the jobs-table heartbeat.
+# (Image HEALTHCHECK targets `serve`; do not enable it here.)
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
