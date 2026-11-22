@@ -1,0 +1,54 @@
+{
+  "version": "1.23.16",
+  "monitorList": [
+    {
+      "name": "sp-portal api healthz",
+      "type": "http",
+      "url": "https://api.serverperch.com/healthz",
+      "method": "GET",
+      "hostname": null,
+      "port": null,
+      "maxretries": 2,
+      "interval": 60,
+      "retryInterval": 60,
+      "resendInterval": 0,
+      "timeout": 30,
+      "active": true,
+      "expiryNotification": false,
+      "ignoreTls": false,
+      "upsideDown": false,
+      "accepted_statuscodes": ["200-299"],
+      "description": "ServerPerch portal app via Apache proxy. JSON {\"status\":\"ok\"} expected. Down = pod/app broke or Apache proxy broke."
+    },
+    {
+      "name": "sp-portal portal SPA",
+      "type": "keyword",
+      "url": "https://portal.serverperch.com/",
+      "method": "GET",
+      "keyword": "<div id=\"root\">",
+      "invertKeyword": false,
+      "maxretries": 2,
+      "interval": 300,
+      "retryInterval": 60,
+      "timeout": 30,
+      "active": true,
+      "ignoreTls": false,
+      "upsideDown": false,
+      "accepted_statuscodes": ["200-299"],
+      "description": "Customer portal SPA shell served by the app (embed). Catches the proxy-up-but-app-serving-errors class."
+    },
+    {
+      "name": "sp-portal TLS expiry",
+      "type": "http",
+      "url": "https://portal.serverperch.com/healthz",
+      "expiryNotification": true,
+      "interval": 3600,
+      "timeout": 30,
+      "active": true,
+      "ignoreTls": false,
+      "accepted_statuscodes": ["200-299"],
+      "description": "Secondary value is the cert-expiry notification; Virtualmin renews via Let's Encrypt, this is the tripwire."
+    }
+  ],
+  "tagList": []
+}

@@ -1,0 +1,99 @@
+# Quadlet unit for sp-portal-app — the HTTP service (`sp-portal serve`).
+# Member of the sp-portal pod (sp-portal.pod); Apache proxies
+# portal./api./admin.serverperch.com to the pod-published 127.0.0.1:8080.
+#
+# Secrets are Podman secrets mounted read-only at /run/secrets/ — never
+# environment variables. Create them once per secrets.md before starting.
+#
+# Runs as container root: rootless Podman maps container uid 0 to the
+# `serverperch` host user, so files written to the storage bind mount are
+# owned by serverperch (the same user rsync deploys and Virtualmin
+# backups run as) and root-only 0400 secret mounts stay readable. There
+# are no extra host privileges. An alternative is `UserNS=keep-id`, but
+# then every Secret= needs uid=/gid= options matching `id -u serverperch`.
+[Unit]
+Description=ServerPerch portal app (serverperch.com)
+After=network-online.target sp-portal-pod.service
+Wants=network-online.target
+Requires=sp-portal-pod.service
+# `serve` exits immediately when the MariaDB socket isn't up yet (a
+# reboot race — MariaDB is a host service). Restart=always retries, but
+# the default start rate-limit would mark the unit failed after five
+# rapid crashes; disabling the limit keeps it retrying until the socket
+# appears.
+StartLimitIntervalSec=0
+
+[Container]
+Pod=sp-portal.pod
+ContainerName=sp-portal-app
+User=0
+# Pin the tag per deploy (deploy.sh pulls it before restarting). The CI
+# chain pushes ghcr.io/technofish-au/sp-portal:<sha> and :latest.
+Image=ghcr.io/technofish-au/sp-portal:latest
+Exec=serve
+
+Environment=PORTAL_HTTP_ADDR=:8080
+Environment=PORTAL_DB_SOCKET=/run/mysqld/mysqld.sock
+Environment=PORTAL_DB_NAME=serverperch
+Environment=PORTAL_DB_USER=sp_portal_app
+Environment=PORTAL_DB_PASSWORD_FILE=/run/secrets/sp_portal_db_password
+Environment=PORTAL_STORAGE_DIR=/var/lib/sp-portal
+Environment=PORTAL_PUBLIC_BASE_URL=https://portal.serverperch.com
+Environment=PORTAL_SECURE_COOKIES=true
+Environment=PORTAL_AUTH_SECRET_FILE=/run/secrets/sp_portal_auth_secret
+Environment=PORTAL_ALTCHA_SECRET_FILE=/run/secrets/sp_portal_altcha_secret
+# Outbound mail — point at the relay Virtualmin/Postfix offers. For a
+# submission relay use port 587 + STARTTLS and smtp_user.
+Environment=PORTAL_SMTP_HOST=smtp.serverperch.com
+Environment=PORTAL_SMTP_PORT=587
+Environment=PORTAL_SMTP_USER=portal@serverperch.com
+Environment=PORTAL_SMTP_PASSWORD_FILE=/run/secrets/sp_portal_smtp_password
+Environment=PORTAL_SMTP_STARTTLS=true
+Environment=PORTAL_MAIL_FROM=portal@serverperch.com
+Environment=PORTAL_MAIL_FROM_NAME="ServerPerch Portal"
+# Stripe: credentials are file-mounted secrets; price ids are non-secret
+# configuration — fill in the live price_* ids at install time.
+Environment=PORTAL_STRIPE_SECRET_KEY_FILE=/run/secrets/sp_portal_stripe_secret_key
+Environment=PORTAL_STRIPE_WEBHOOK_SECRET_FILE=/run/secrets/sp_portal_stripe_webhook_secret
+Environment=PORTAL_STRIPE_PRICE_STARTER=price_REPLACE_starter
+Environment=PORTAL_STRIPE_PRICE_PRO=price_REPLACE_pro
+Environment=PORTAL_STRIPE_PRICE_ENTERPRISE=price_REPLACE_enterprise
+Environment=PORTAL_STRIPE_AUTOMATIC_TAX=true
+# Licence issuer (09-release-roadmap.md R5, licence document). The
+# signing key is a Podman secret; kid rotates per R9 key ceremony.
+Environment=PORTAL_LICENCE_ISSUER_KID=lic-2027-1
+Environment=PORTAL_LICENCE_SIGNING_KEY_FILE=/run/secrets/sp_portal_licence_signing_key
+Environment=PORTAL_DOWNLOAD_SECRET_FILE=/run/secrets/sp_portal_download_secret
+Environment=PORTAL_BUNDLE_SIGNING_KEY_FILE=/run/secrets/sp_portal_bundle_signing_key
+Environment=PORTAL_BUNDLE_SIGNING_KID=bundle-2027-1
+
+# Secrets — all type=mount (files under /run/secrets/), read-only,
+# root-only mode. See ../secrets/secrets.md for the create commands.
+Secret=sp_portal_db_password,type=mount,mode=0400
+Secret=sp_portal_auth_secret,type=mount,mode=0400
+Secret=sp_portal_altcha_secret,type=mount,mode=0400
+Secret=sp_portal_smtp_password,type=mount,mode=0400
+Secret=sp_portal_stripe_secret_key,type=mount,mode=0400
+Secret=sp_portal_stripe_webhook_secret,type=mount,mode=0400
+Secret=sp_portal_download_secret,type=mount,mode=0400
+Secret=sp_portal_licence_signing_key,type=mount,mode=0400
+Secret=sp_portal_bundle_signing_key,type=mount,mode=0400
+
+# Host MariaDB unix socket (Virtualmin's MariaDB stays off TCP).
+Volume=/run/mysqld:/run/mysqld:ro
+# Shared local-disk storage: releases/ apt/ offline-bundles/
+# support-bundles/ exports/ — the same tree TeamCity rsyncs into and
+# Virtualmin backs up.
+Volume=/home/serverperch/storage:/var/lib/sp-portal
+
+HealthCmd=sp-portal healthcheck
+HealthInterval=30s
+HealthTimeout=5s
+HealthRetries=3
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
