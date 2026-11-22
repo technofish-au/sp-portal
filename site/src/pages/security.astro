@@ -1,0 +1,117 @@
+---
+import Base from '../layouts/Base.astro';
+import { CONTACT } from '../data/site';
+---
+
+<Base
+  title="Security"
+  description="How ServerPerch is built: a self-hosted appliance, mutually authenticated agent connections, signed licences and releases, and support bundles that are pseudonymised and encrypted before they leave your estate."
+>
+  <section class="hero">
+    <div class="container">
+      <h1>Security</h1>
+      <p class="lede">
+        ServerPerch is a patch-management platform — it sits in the middle of your
+        estate, so it is engineered as if it were the most sensitive host on your
+        network. This page summarises the model; the full operator security
+        documentation ships with the product.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="container prose">
+      <h2>Self-hosted, no outbound dependency</h2>
+      <p>
+        The platform runs on a virtual appliance inside your network. A running
+        appliance does not depend on serverperch.com being reachable: licences are
+        <strong>signed documents verified locally</strong>, and a daily licence check-in
+        renews a lease with a grace window rather than gating operations. Missed
+        check-ins never stop agents reporting in or block you during an incident.
+      </p>
+      <p>
+        Outbound connections from the appliance are few and documented
+        (serverperch.com for licence check-in and downloads, OS security-advisory
+        feeds, and whatever you configure for SMTP, webhooks or directory service). An
+        optional allow-list mode is available for regulated environments, and
+        fully air-gapped installs use offline licence files and update bundles.
+      </p>
+
+      <h2>Agent connections</h2>
+      <ul>
+        <li>
+          Agents connect to your appliance over <strong>mutually authenticated
+          TLS&nbsp;1.3</strong> — each machine holds a certificate issued by the
+          appliance's own CA, and the appliance identity is pinned at enrolment.
+        </li>
+        <li>
+          Jobs dispatched to agents are <strong>signed</strong>; agents verify the
+          signature before acting.
+        </li>
+        <li>
+          Agent self-upgrades verify Ed25519-signed release manifests before
+          installing.
+        </li>
+        <li>
+          Machine state lives in your appliance's database with tenant isolation —
+          nothing is streamed to ServerPerch.
+        </li>
+      </ul>
+
+      <h2>Licensing</h2>
+      <ul>
+        <li>
+          Licences are Ed25519-signed documents verified against public keys compiled
+          into the product — no phone-home is required to validate them.
+        </li>
+        <li>
+          Connected appliances renew a short check-in lease daily; air-gapped
+          appliances run from offline licence files.
+        </li>
+        <li>
+          Enforcement is deliberately soft: licence problems degrade purchase and
+          download workflows, not your running estate.
+        </li>
+      </ul>
+
+      <h2>Secrets and support data</h2>
+      <ul>
+        <li>
+          Appliance-held secrets (CA keys, install credentials, API tokens) are sealed
+          under a master key and redacted from UI, API and logs.
+        </li>
+        <li>
+          Support bundles are <strong>pseudonymised by default</strong>: hostnames,
+          tenant names, emails, IPs and DNS names become stable HMAC-derived tokens,
+          and the map that reverses them stays on your appliance.
+        </li>
+        <li>
+          Bundles are encrypted to the ServerPerch support public key before upload;
+          the decryption key is held by support staff, not on our servers. Bundles are
+          deleted automatically after 30 days, and every staff access is audit-logged
+          and visible to you.
+        </li>
+        <li>
+          Known-sensitive material is never included in a bundle — private keys,
+          password hashes, session tokens and TOTP secrets are excluded, and a leak
+          test in the release pipeline fails the build if a canary secret appears.
+        </li>
+      </ul>
+
+      <h2>Customer portal accounts</h2>
+      <ul>
+        <li>Passwords hashed with Argon2id; TOTP required for organisation owners.</li>
+        <li>Per-user and per-IP rate limiting on sign-in, plus bot checks on sign-up.</li>
+        <li>All customer and staff mutations are audit-logged.</li>
+        <li>Payments are handled entirely by Stripe — card data never touches us.</li>
+      </ul>
+
+      <h2>Reporting a vulnerability</h2>
+      <p>
+        Email <a href={`mailto:${CONTACT.security}`}>{CONTACT.security}</a>. Please
+        include reproduction details and allow us reasonable time to investigate
+        before public disclosure.
+      </p>
+    </div>
+  </section>
+</Base>

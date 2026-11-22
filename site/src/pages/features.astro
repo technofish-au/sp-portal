@@ -1,0 +1,84 @@
+---
+import Base from '../layouts/Base.astro';
+import { PORTAL } from '../data/site';
+---
+
+<Base
+  title="Features"
+  description="Update management, monitoring, inventory, remote jobs and audited terminal sessions for Linux and Windows estates — all from a single self-hosted ServerPerch appliance."
+>
+  <section class="hero">
+    <div class="container">
+      <h1>Features</h1>
+      <p class="lede">
+        Everything on this page runs from one self-hosted appliance. There is no cloud
+        control plane and no per-feature upsell — the licence covers the platform.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="container prose">
+      <h2>Update and patch management</h2>
+      <ul>
+        <li>
+          Pending-update view across Debian, Ubuntu and RHEL-family machines, with
+          security updates flagged.
+        </li>
+        <li>
+          Update policies per machine tag: patch windows, package selections and
+          approval rules.
+        </li>
+        <li>Per-machine rollout results and update history, kept on your appliance.</li>
+        <li>
+          Hosted package repositories served by the appliance for controlled,
+          internal update distribution.
+        </li>
+      </ul>
+
+      <h2>Monitoring and inventory</h2>
+      <ul>
+        <li>Lightweight agent: machine health, installed packages, update status.</li>
+        <li>Estate dashboard and a NOC wallboard view for operations screens.</li>
+        <li>Alerting and notifications on check-in lateness and failures.</li>
+        <li>Machine tagging and grouping for scoping views, jobs and update policy.</li>
+      </ul>
+
+      <h2>Remote operations</h2>
+      <ul>
+        <li>Push-install of agents over SSH and WinRM, with credential vaulting.</li>
+        <li>Signed job dispatch to tagged machine groups.</li>
+        <li>Audited remote terminal sessions with recordings kept on the appliance.</li>
+      </ul>
+
+      <h2>Platform</h2>
+      <ul>
+        <li>Multi-tenant: separate teams or customers on one appliance with RBAC.</li>
+        <li>
+          Delivered as OVA, VHDX and qcow2 appliance images with checksums and
+          signatures; upgrades via the appliance apt repository or offline bundles.
+        </li>
+        <li>LDAP/directory sign-in, TOTP, and full audit logging of operator actions.</li>
+        <li>
+          Offline-first licensing: signed licence documents verified locally;
+          air-gapped installs supported.
+        </li>
+      </ul>
+
+      <h2>Customer portal</h2>
+      <ul>
+        <li>Licence keys, seat usage and appliance activations in one place.</li>
+        <li>
+          Appliance images and offline update bundles behind short-lived signed
+          download URLs.
+        </li>
+        <li>Self-service billing via Stripe, plus an annual-invoice option.</li>
+      </ul>
+
+      <p>
+        <a class="btn btn-primary" href={PORTAL.signup}>Start a trial</a>
+        <a class="btn btn-outline" href="/pricing">Compare tiers</a>
+      </p>
+    </div>
+  </section>
+</Base>

@@ -1,0 +1,63 @@
+---
+import Base from '../layouts/Base.astro';
+import { CONTACT, PORTAL } from '../data/site';
+---
+
+<Base
+  title="Contact"
+  description="Contact ServerPerch: sales enquiries, support and security reports."
+>
+  <section class="hero">
+    <div class="container">
+      <h1>Contact</h1>
+      <p class="lede">
+        This site is static — there's no contact form backend. Email reaches a human;
+        pick the address that fits.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <div class="grid grid-3">
+        <div class="card">
+          <h2>Sales and licensing</h2>
+          <p>
+            Trials, tiers, enterprise annual-invoice licences, purchase orders and
+            air-gapped licensing.
+          </p>
+          <p>
+            <a class="btn btn-outline btn-sm" href={`mailto:${CONTACT.sales}`}>
+              {CONTACT.sales}
+            </a>
+          </p>
+        </div>
+        <div class="card">
+          <h2>Support</h2>
+          <p>
+            Existing customers: include your licence key or organisation name. Support
+            bundles are uploaded from the appliance or the
+            <a href={PORTAL.root}>customer portal</a>.
+          </p>
+          <p>
+            <a class="btn btn-outline btn-sm" href={`mailto:${CONTACT.support}`}>
+              {CONTACT.support}
+            </a>
+          </p>
+        </div>
+        <div class="card">
+          <h2>Security reports</h2>
+          <p>
+            Vulnerability reports for the appliance, agent or this site's
+            infrastructure. See the <a href="/security">security page</a> first.
+          </p>
+          <p>
+            <a class="btn btn-outline btn-sm" href={`mailto:${CONTACT.security}`}>
+              {CONTACT.security}
+            </a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>
