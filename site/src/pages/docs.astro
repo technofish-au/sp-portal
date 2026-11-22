@@ -1,0 +1,53 @@
+---
+import Base from '../layouts/Base.astro';
+import { PORTAL } from '../data/site';
+---
+
+<Base
+  title="Documentation"
+  description="Where to find ServerPerch documentation: operator and user docs ship with the appliance; a versioned public docs site is planned."
+>
+  <section class="hero">
+    <div class="container">
+      <h1>Documentation</h1>
+      <p class="lede">
+        ServerPerch's operator and user documentation is maintained alongside the
+        product and ships with the appliance itself.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="container prose">
+      <h2>Today</h2>
+      <ul>
+        <li>
+          <strong>In the product:</strong> the appliance ships its operator and user
+          guides — install, licensing, updates and policies, monitoring, PKI and
+          enrolment, security, backup/restore and troubleshooting — so the docs always
+          match the version you are running, including on air-gapped networks.
+        </li>
+        <li>
+          <strong>In the portal:</strong> your
+          <a href={PORTAL.root}>customer portal</a> account gives you licence keys,
+          activation management and appliance downloads (OVA, VHDX, qcow2) with
+          checksums and signatures.
+        </li>
+        <li>
+          <strong>Evaluating?</strong> The <a href="/features">features</a> and
+          <a href="/security">security</a> pages cover the platform's shape; a
+          <a href={PORTAL.signup}>trial account</a> is the fastest way to read the
+          real docs — they ship inside the trial appliance.
+        </li>
+      </ul>
+
+      <h2>Coming</h2>
+      <p>
+        A public, versioned documentation site (<code>docs.serverperch.com</code>) is
+        on the release roadmap. Until it is published this page is the canonical
+        pointer — if you need a specific document before then,
+        <a href="/contact">contact us</a> and we'll send it.
+      </p>
+    </div>
+  </section>
+</Base>

@@ -18,6 +18,8 @@ web UI.
 - `internal/jobs` — durable job queue (`jobs` table) + worker
 - `web` — React + Mantine + Vite + TypeScript UI (embedded into the binary)
 - `deploy/` — Dockerfile (Debian 13), dev compose, Podman quadlets
+- `site/` — the static serverperch.com marketing site (Astro → `public_html`
+  via `site/deploy.sh`; see `site/README.md`)
 - `api/openapi.yaml` — API skeleton (`/healthz` now, `/v1/*` documented
   placeholders)
 

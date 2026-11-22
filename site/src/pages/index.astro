@@ -1,0 +1,133 @@
+---
+import Base from '../layouts/Base.astro';
+import { PORTAL, TRIAL } from '../data/site';
+---
+
+<Base
+  title="Self-hosted patch and estate management"
+  description="ServerPerch is a self-hosted virtual appliance for update management, monitoring and inventory across your Linux and Windows estate. Your servers, your data, your keys."
+>
+  <section class="hero">
+    <div class="container">
+      <h1>Patch and estate management that stays on your network</h1>
+      <p class="lede">
+        ServerPerch is a self-hosted virtual appliance for update management, monitoring
+        and inventory across your Linux and Windows machines. No SaaS control plane, no
+        data leaves your estate — you run it, you own it.
+      </p>
+      <div class="actions">
+        <a class="btn btn-primary" href={PORTAL.signup}>
+          Start a {TRIAL.days}-day trial
+        </a>
+        <a class="btn btn-outline" href="/pricing">See pricing</a>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <h2>What ServerPerch does</h2>
+      <p class="section-intro">
+        One appliance, one console: the operational view of your estate that normally
+        takes three tools and a spreadsheet.
+      </p>
+      <div class="grid grid-3">
+        <div class="card">
+          <h3>Update management</h3>
+          <p>
+            See pending OS and package updates across Debian, Ubuntu and RHEL-family
+            machines, group them by policy, and roll them out on your schedule — with
+            per-machine outcomes recorded.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Monitoring and inventory</h3>
+          <p>
+            A lightweight agent reports machine health, installed packages and update
+            status. Live dashboards, a NOC wallboard view, and alerting on the things
+            that actually break.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Remote operations</h3>
+          <p>
+            Push-install agents over SSH or WinRM, run signed jobs against tagged
+            machine groups, and open audited terminal sessions — all through the same
+            appliance.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <h2>On-prem by design</h2>
+      <p class="section-intro">
+        ServerPerch ships as a virtual appliance (OVA, VHDX or qcow2) that you deploy on
+        your own hypervisor. It is built for estates where the patch server itself has
+        to be trustworthy.
+      </p>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3>No outbound dependency</h3>
+          <p>
+            A running appliance does not need internet access to keep working. Licences
+            are signed documents verified offline, and agents keep checking in even if
+            the licence check-in is overdue. Air-gapped installs are supported with
+            offline licence files and update bundles.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Your keys, your data</h3>
+          <p>
+            Agents authenticate over mutually authenticated TLS to your appliance, not
+            to us. Inventory, recordings and update history stay in your database, on
+            your hardware.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <h2>How a rollout looks</h2>
+      <div class="grid grid-3">
+        <div class="card">
+          <h3>1. Deploy</h3>
+          <p>
+            Import the appliance image, answer the first-boot questions, and enrol your
+            first machines with a one-line install command or push-install.
+          </p>
+        </div>
+        <div class="card">
+          <h3>2. Activate</h3>
+          <p>
+            Enter your licence key from the customer portal — or import an offline
+            licence file if the appliance can't reach the internet.
+          </p>
+        </div>
+        <div class="card">
+          <h3>3. Manage</h3>
+          <p>
+            Set update policies per machine group, watch results come in, and let the
+            daily licence check-in renew itself in the background.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="cta-band">
+    <div class="container">
+      <h2>Try it on your own estate</h2>
+      <p>
+        The trial gives you {TRIAL.days} days and {TRIAL.machines} managed machines —
+        no card required. Sign-up takes a minute and issues your licence key
+        immediately.
+      </p>
+      <a class="btn btn-primary" href={PORTAL.signup}>Create a trial account</a>
+    </div>
+  </div>
+</Base>

@@ -1,0 +1,157 @@
+---
+import Base from '../layouts/Base.astro';
+import { PORTAL, TRIAL, CONTACT } from '../data/site';
+import {
+  TIERS,
+  ENTERPRISE,
+  CURRENCY,
+  CURRENCY_SYMBOL,
+  PRICES_ARE_PLACEHOLDER,
+  annualSavingPercent,
+  formatCents,
+} from '../data/pricing';
+---
+
+<Base
+  title="Pricing"
+  description="ServerPerch pricing: per-managed-machine tiers up to 5,000 machines, monthly or annual billing, and an annual-invoice enterprise option. 30-day trial included."
+>
+  <section class="hero">
+    <div class="container">
+      <h1>Pricing</h1>
+      <p class="lede">
+        One licence per appliance, sized by the number of managed machines. Every tier
+        includes the full platform — updates, monitoring, remote operations and the
+        customer portal.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      {
+        PRICES_ARE_PLACEHOLDER && (
+          <p class="note placeholder" role="note">
+            Prices below are provisional and shown before final list pricing is set.
+            Figures are in {CURRENCY}, ex GST; Stripe Tax adds GST where applicable at
+            checkout.
+          </p>
+        )
+      }
+
+      <div class="billing-toggle" role="group" aria-label="Billing period">
+        <button type="button" id="billing-monthly" aria-pressed="true">Monthly</button>
+        <button type="button" id="billing-annual" aria-pressed="false">
+          Annual <span aria-hidden="true">(save)</span>
+        </button>
+      </div>
+
+      <div class="price-grid">
+        {
+          TIERS.map((t) => (
+            <div class="price-card">
+              <h2>{t.name}</h2>
+              <span class="machines">Up to {t.maxMachines.toLocaleString('en-AU')} managed machines</span>
+              <p
+                class="amount"
+                data-monthly={`${CURRENCY_SYMBOL}${formatCents(t.monthlyCents)}`}
+                data-annual={`${CURRENCY_SYMBOL}${formatCents(t.annualCents)}`}
+              >
+                {CURRENCY_SYMBOL}{formatCents(t.monthlyCents)}
+              </p>
+              <p
+                class="per"
+                data-monthly="per month, billed monthly"
+                data-annual={`per year, billed annually — save ${annualSavingPercent(t)}%`}
+              >
+                per month, billed monthly
+              </p>
+              <p class="blurb">{t.blurb}</p>
+              <a
+                class="btn btn-primary"
+                href={PORTAL.root}
+                aria-label={`Buy ${t.name} in the customer portal`}
+              >
+                Buy {t.name}
+              </a>
+            </div>
+          ))
+        }
+      </div>
+
+      <p class="note note-followup">
+        Buying happens in the customer portal: sign in (or create an account), open the
+        dashboard and choose <strong>Buy</strong> — checkout is a Stripe-hosted page.
+        Billing self-service (card, invoices, plan changes, cancellation) is in the same
+        place via <em>Manage billing</em>.
+      </p>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <h2>{ENTERPRISE.name} — annual invoice</h2>
+      <p class="section-intro">{ENTERPRISE.blurb}</p>
+      <p>
+        <a class="btn btn-outline" href={`mailto:${CONTACT.sales}?subject=ServerPerch%20Enterprise%20licence`}>
+          Contact sales
+        </a>
+      </p>
+
+      <h2>Included in every tier</h2>
+      <div class="grid grid-3">
+        <div class="card">
+          <h3>Full platform</h3>
+          <p>
+            Update management, monitoring, inventory, remote jobs and audited
+            terminals. No feature gating by tier.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Appliance images</h3>
+          <p>
+            OVA, VHDX and qcow2 downloads with checksums and signatures, plus access to
+            the appliance update channel.
+          </p>
+        </div>
+        <div class="card">
+          <h3>{TRIAL.days}-day trial</h3>
+          <p>
+            Every account starts with a {TRIAL.days}-day, {TRIAL.machines}-machine
+            trial licence — no card required. Buying converts it in place.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="cta-band">
+    <div class="container">
+      <h2>Start with the trial</h2>
+      <p>
+        {TRIAL.days} days, {TRIAL.machines} machines, no card. When you buy, the same
+        licence key converts to your paid tier.
+      </p>
+      <a class="btn btn-primary" href={PORTAL.signup}>Create a trial account</a>
+    </div>
+  </div>
+
+  <script>
+    // Monthly/annual billing toggle — the only client JS on the site.
+    const monthly = document.getElementById('billing-monthly');
+    const annual = document.getElementById('billing-annual');
+    const fields = document.querySelectorAll('[data-monthly][data-annual]');
+
+    function setBilling(mode) {
+      monthly?.setAttribute('aria-pressed', String(mode === 'monthly'));
+      annual?.setAttribute('aria-pressed', String(mode === 'annual'));
+      fields.forEach((el) => {
+        const value = el.getAttribute(`data-${mode}`);
+        if (value) el.textContent = value;
+      });
+    }
+
+    monthly?.addEventListener('click', () => setBilling('monthly'));
+    annual?.addEventListener('click', () => setBilling('annual'));
+  </script>
+</Base>
