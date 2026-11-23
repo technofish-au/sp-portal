@@ -62,8 +62,8 @@ services:
     depends_on:
       mariadb:
         condition: service_healthy
-      mailpit:
-        condition: service_started
+      # mailpit:
+      #   condition: service_started
     healthcheck:
       test: ["CMD", "sp-portal", "healthcheck"]
       interval: 10s
@@ -102,11 +102,11 @@ services:
 
   # Mailpit catches all outbound email in dev: SMTP on :1025, the caught
   # mail web UI on http://localhost:8025.
-  mailpit:
-    image: axllent/mailpit:latest
-    ports:
-      - "127.0.0.1:1025:1025"
-      - "127.0.0.1:8025:8025"
+  # mailpit:
+  #   image: axllent/mailpit:latest
+  #   ports:
+  #     - "127.0.0.1:1025:1025"
+  #     - "127.0.0.1:8025:8025"
 
 volumes:
   mariadb-data:
